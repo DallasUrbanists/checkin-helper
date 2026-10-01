@@ -136,7 +136,9 @@ The app communicates with the [Dallas Urbanists API](https://github.com/DallasUr
 
 ## Calendar
 
-The Meetup iCal feed is proxied through Vite at `/meetup-ical` to work around CORS restrictions. The parser handles:
+The Meetup iCal feed is fetched from the URL specified by `VITE_ICAL_URL` (defaults to `/meetup-ical`). In local development, this route is proxied through Vite to work around CORS restrictions. For static hosting like GitHub Pages, configure `VITE_ICAL_URL` (e.g. in GitHub repository variables) to point to a CORS-enabled proxy endpoint or calendar feed.
+
+The parser handles:
 
 - Timezone-aware times (TZID, UTC with Z, floating times)
 - Folded lines and escaped characters

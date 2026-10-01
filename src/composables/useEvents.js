@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { parseIcal } from './ical.js'
 
-const ICAL_URL = '/meetup-ical'
+const ICAL_URL = import.meta.env.VITE_ICAL_URL || '/meetup-ical'
 const LOOKBACK_MS = 12 * 60 * 60 * 1000
 const LOOKAHEAD_MS = 24 * 60 * 60 * 1000
 
