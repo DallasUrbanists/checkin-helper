@@ -1,8 +1,35 @@
 {
-  "name": "bootstrap-examples",
-  "description": "Functional examples for building with Bootstrap using popular tools and frameworks.",
-  "version": "0.0.0",
-  "private": true,
-  "repository": "twbs/examples",
-  "license": "MIT"
+  "name": "checkin-helper",
+  "version": "1.0.0",
+  "description": "Tool for event check-in. Saves contacts to Dallas Urbanists database.",
+  "author": "Hexel Colorado",
+  "type": "module",
+  "license": "MIT",
+  "stackblitz": {
+    "startCommand": "npm start"
+  },
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173",
+    "lint": "eslint .",
+    "fix": "npm run lint -- --fix",
+    "test": "npm run build && npm run lint"
+  },
+  "dependencies": {
+    "@popperjs/core": "^2.11.8",
+    "bootstrap": "^5.3.8",
+    "vue": "^3.5.31"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "eslint": "^10.9.1",
+    "eslint-plugin-vue": "^10.10.0",
+    "sass": "^1.103.1",
+    "sass-loader": "^17.0.0",
+    "vite": "^8.2.2",
+    "vue-eslint-parser": "^10.4.1",
+    "vue-loader": "^17.4.2"
+  }
 }
