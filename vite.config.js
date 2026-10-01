@@ -1,11 +1,24 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
+// Meetup's iCal feed sends no CORS headers, so the browser reads it through this proxy
+const icalProxy = {
+  '/meetup-ical': {
+    target: 'https://www.meetup.com',
+    changeOrigin: true,
+    rewrite: () => '/dallasurbanists/events/ical/'
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [vue()],
   server: {
-    port: 8080
+    port: 8080,
+    proxy: icalProxy
+  },
+  preview: {
+    proxy: icalProxy
   },
   css: {
     preprocessorOptions: {

@@ -5,6 +5,22 @@ import vueParser from 'vue-eslint-parser';
 export default [
   js.configs.recommended,
   {
+    languageOptions: {
+      globals: {
+        window: 'readonly',
+        process: 'readonly',
+        document: 'readonly',
+        fetch: 'readonly',
+        console: 'readonly',
+        URL: 'readonly',
+        Intl: 'readonly',
+        AbortController: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly'
+      }
+    }
+  },
+  {
     files: ['**/*.vue'],
     languageOptions: {
       parser: vueParser,

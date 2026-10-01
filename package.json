@@ -14,15 +14,18 @@
     "preview": "vite preview --port 4173",
     "lint": "eslint .",
     "fix": "npm run lint -- --fix",
-    "test": "npm run build && npm run lint"
+    "test": "npm run build && npm run lint",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",
     "bootstrap": "^5.3.8",
-    "vue": "^3.5.31"
+    "vue": "^3.5.31",
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@vitejs/plugin-vue": "^6.0.8",
     "eslint": "^10.9.1",
     "eslint-plugin-vue": "^10.10.0",
