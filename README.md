@@ -25,7 +25,7 @@ Fast, mobile-friendly event check-in tool for Dallas Urbanists. Register attende
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - npm
 
 ### Installation
