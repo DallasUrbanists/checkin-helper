@@ -138,9 +138,9 @@ async function onSubmit() {
           <div id="email-feedback" class="invalid-feedback">{{ errors.email }}</div>
         </div>
 
-        <div class="mb-3 row">
-          <label for="phone" class="col-form-label col-3">Phone</label>
-          <div class="col">
+        <div class="mb-3 d-inline-flex align-items-stretch w-100">
+          <label for="phone" class="col-form-label pe-3" style="width: 80px;">Phone</label>
+          <div class="flex-grow-1">
             <input id="phone" :value="form.phone" type="text" inputmode="numeric" class="form-control form-control-lg"
               :class="{ 'is-invalid': errors.phone }" autocomplete="off" :aria-invalid="!!errors.phone"
               aria-describedby="phone-feedback" @input="onPhone" @blur="validateField('phone')">
@@ -148,9 +148,9 @@ async function onSubmit() {
           </div>
         </div>
 
-        <div class="mb-4 row">
-          <label for="zip" class="col-form-label col-3">Zip code</label>
-          <div class="col">
+        <div class="mb-3 d-inline-flex align-items-stretch w-100">
+          <label for="zip" class="col-form-label pe-3"  style="width: 80px;">Zip code</label>
+          <div class="flex-grow-1">
             <input id="zip" :value="form.zip" type="text" inputmode="numeric" class="form-control form-control-lg"
               :class="{ 'is-invalid': errors.zip }" autocomplete="off" :aria-invalid="!!errors.zip"
               aria-describedby="zip-feedback" @input="onZip" @blur="validateField('zip')">
