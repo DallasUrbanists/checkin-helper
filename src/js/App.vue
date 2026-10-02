@@ -4,8 +4,8 @@ import Footer from '../components/AppFooter.vue'
 </script>
 
 <template>
-  <div class="container py-4 px-3 mx-auto">
-    <Header />
+  <Header />
+  <div class="container py-4 pt-0 px-3 mx-auto">
 
     <RouterView />
 

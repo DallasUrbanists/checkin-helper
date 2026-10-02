@@ -9,9 +9,8 @@ test.describe('event list', () => {
     await mockCalendar(page)
     await page.goto('/')
 
-    await expect(page.getByRole('heading', { name: 'Choose an event' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Current Events' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Future Events' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Current' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Future' })).toBeVisible()
     await expect(rows(page).locator('.fw-semibold')).toHaveText([
       'Recent Event',
       'Upcoming Soon',
@@ -41,8 +40,8 @@ test.describe('event list', () => {
     await mockCalendar(page, [{ id: '1', title: 'Far Future', start: hoursFromNow(200) }])
     await page.goto('/')
 
-    await expect(page.getByText('No current events at this time.')).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Future Events' })).toBeVisible()
+    await expect(page.getByText('No current events ready for check-in at this time.')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Future' })).toBeVisible()
     await expect(rows(page).locator('.fw-semibold')).toHaveText(['Far Future'])
   })
 
@@ -114,7 +113,7 @@ test.describe('event list', () => {
     })
     await page.goto('/')
     await page.getByText('Only Event').click()
-    await page.getByRole('link', { name: /All events/ }).click()
+    await page.getByRole('button', { name: 'Back' }).click()
 
     await expect(page.getByText('Only Event')).toBeVisible()
     expect(requests).toBe(1)

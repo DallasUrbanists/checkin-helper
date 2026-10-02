@@ -369,7 +369,7 @@ test.describe('confirmation page', () => {
     await page.getByRole('button', { name: 'Check in another person' }).click()
 
     await expect(page).toHaveURL(/#\/checkin\/1003$/)
-    await expect(page.getByRole('heading', { name: 'Check in to Upcoming Soon' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Check in' })).toBeVisible()
     await expect(page.locator('#name')).toHaveValue('')
     await expect(page.locator('#email')).toHaveValue('')
   })

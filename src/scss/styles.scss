@@ -38,6 +38,8 @@ $body-color: #333;
 $body-bg: #f5f3ee;
 $border-radius: .4rem;
 $success: #7952b3;
+$primary: #ffa800;
+$secondary: #0c2340;
 
 // Form Input Overrides
 $input-bg: #ffffff;             // <-- Sets default background for .form-control & .form-select
@@ -66,8 +68,8 @@ $list-group-bg: white;
 @import "bootstrap/scss/transitions";
 @import "bootstrap/scss/dropdown";
 // @import "bootstrap/scss/button-group";
-// @import "bootstrap/scss/nav";
-// @import "bootstrap/scss/navbar"; // Requires nav
+@import "bootstrap/scss/nav";
+@import "bootstrap/scss/navbar"; // Requires nav
 // @import "bootstrap/scss/card";
 // @import "bootstrap/scss/breadcrumb";
 // @import "bootstrap/scss/accordion";
@@ -96,10 +98,6 @@ $list-group-bg: white;
 //
 // Custom styles
 //
-
-body {
-  padding: 8px;
-}
 
 .loading-interstitial {
   z-index: $zindex-modal;

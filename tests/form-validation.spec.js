@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { mockApi, mockCalendar, submitCheckin } from './helpers.js'
 
-const DOMAINS = ['@gmail.com', '@yahoo.com', '@outlook.com', '@icloud.com', '@hotmail.com', '@proton.me', '@sbcglobal.net']
+const DOMAINS = ['@gmail.com', '@yahoo.com', '@outlook.com', '@icloud.com', '@hotmail.com', '@proton.me']
 
 test.beforeEach(async ({ page }) => {
   await mockCalendar(page)

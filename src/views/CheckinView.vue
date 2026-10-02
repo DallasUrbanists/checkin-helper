@@ -109,95 +109,53 @@ async function onSubmit() {
     </div>
 
     <template v-else>
-        <h2 class="h3">Check in to {{ event.title }}</h2>
-        <p class="mb-4 text-muted small">{{ formatEventDate(event) }}</p>
+      <h2 class="h3 mb-0">Check in</h2>
+      <p class="mb-2 text-muted small">{{ formatEventDate(event) }}</p>
 
       <div v-if="state.error" class="alert alert-danger" role="alert">{{ state.error }}</div>
 
       <form novalidate @submit.prevent="onSubmit">
         <div class="mb-3">
-          <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
-          <input
-            id="name"
-            :value="form.name"
-            type="text"
-            class="form-control form-control-lg"
-            :class="{ 'is-invalid': errors.name }"
-            autocomplete="off"
-            required
-            :aria-invalid="!!errors.name"
-            aria-describedby="name-feedback"
-            @input="onName"
-            @blur="validateField('name')"
-          >
+          <label for="name" class="form-label">Name <span class="text-muted">(required)</span></label>
+          <input id="name" :value="form.name" type="text" class="form-control form-control-lg"
+            :class="{ 'is-invalid': errors.name }" autocomplete="off" required :aria-invalid="!!errors.name"
+            aria-describedby="name-feedback" @input="onName" @blur="validateField('name')">
           <div id="name-feedback" class="invalid-feedback">{{ errors.name }}</div>
         </div>
 
         <div class="mb-3">
-          <label for="email" class="form-label">Email <span class="text-muted small">(optional)</span></label>
-          <input
-            id="email"
-            :value="form.email"
-            type="text"
-            inputmode="email"
-            class="form-control form-control-lg"
-            :class="{ 'is-invalid': errors.email }"
-            autocomplete="off"
-            autocapitalize="none"
-            spellcheck="false"
-            :aria-invalid="!!errors.email"
-            aria-describedby="email-feedback"
-            @input="onEmail"
-            @blur="validateField('email')"
-          >
+          <label for="email" class="form-label">Email</label>
+          <input id="email" :value="form.email" type="text" inputmode="email" class="form-control form-control-lg"
+            :class="{ 'is-invalid': errors.email }" autocomplete="off" autocapitalize="none" spellcheck="false"
+            :aria-invalid="!!errors.email" aria-describedby="email-feedback" @input="onEmail"
+            @blur="validateField('email')">
           <div v-if="showDomains" class="d-flex flex-wrap gap-1 mt-2">
-            <button
-              v-for="domain in EMAIL_DOMAINS"
-              :key="domain"
-              type="button"
-              class="btn btn-sm btn-outline-secondary"
-              @click="appendDomain(domain)"
-            >
+            <button v-for="domain in EMAIL_DOMAINS" :key="domain" type="button" class="btn btn-sm btn-outline-secondary"
+              @click="appendDomain(domain)">
               {{ domain }}
             </button>
           </div>
           <div id="email-feedback" class="invalid-feedback">{{ errors.email }}</div>
         </div>
 
-        <div class="mb-3">
-          <label for="phone" class="form-label">Phone <span class="text-muted small">(optional)</span></label>
-          <input
-            id="phone"
-            :value="form.phone"
-            type="text"
-            inputmode="numeric"
-            class="form-control form-control-lg"
-            :class="{ 'is-invalid': errors.phone }"
-            autocomplete="off"
-            :aria-invalid="!!errors.phone"
-            aria-describedby="phone-feedback"
-            @input="onPhone"
-            @blur="validateField('phone')"
-          >
-          <div id="phone-feedback" class="invalid-feedback">{{ errors.phone }}</div>
+        <div class="mb-3 row">
+          <label for="phone" class="col-form-label col-3">Phone</label>
+          <div class="col">
+            <input id="phone" :value="form.phone" type="text" inputmode="numeric" class="form-control form-control-lg"
+              :class="{ 'is-invalid': errors.phone }" autocomplete="off" :aria-invalid="!!errors.phone"
+              aria-describedby="phone-feedback" @input="onPhone" @blur="validateField('phone')">
+            <div id="phone-feedback" class="invalid-feedback">{{ errors.phone }}</div>
+          </div>
         </div>
 
-        <div class="mb-4">
-          <label for="zip" class="form-label">Zip code <span class="text-muted small">(optional)</span></label>
-          <input
-            id="zip"
-            :value="form.zip"
-            type="text"
-            inputmode="numeric"
-            class="form-control form-control-lg"
-            :class="{ 'is-invalid': errors.zip }"
-            autocomplete="off"
-            :aria-invalid="!!errors.zip"
-            aria-describedby="zip-feedback"
-            @input="onZip"
-            @blur="validateField('zip')"
-          >
-          <div id="zip-feedback" class="invalid-feedback">{{ errors.zip }}</div>
+        <div class="mb-4 row">
+          <label for="zip" class="col-form-label col-3">Zip code</label>
+          <div class="col">
+            <input id="zip" :value="form.zip" type="text" inputmode="numeric" class="form-control form-control-lg"
+              :class="{ 'is-invalid': errors.zip }" autocomplete="off" :aria-invalid="!!errors.zip"
+              aria-describedby="zip-feedback" @input="onZip" @blur="validateField('zip')">
+            <div id="zip-feedback" class="invalid-feedback">{{ errors.zip }}</div>
+          </div>
         </div>
 
         <button type="submit" class="btn btn-primary btn-lg w-100" :disabled="state.busy">Check in</button>

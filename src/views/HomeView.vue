@@ -9,8 +9,6 @@ onMounted(load)
 
 <template>
   <main>
-    <h2 class="h3 mb-3">Choose an event</h2>
-
     <div v-if="status === 'loading' || status === 'idle'" class="d-flex align-items-center" role="status">
       <div class="spinner-border spinner-border-sm me-2" aria-hidden="true"></div>
       Loading events...
