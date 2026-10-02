@@ -18,10 +18,12 @@ Fast, mobile-friendly event check-in tool for Dallas Urbanists. Register attende
 - **Styling** — Bootstrap 5.3 SCSS, custom utility classes
 - **Bundler** — Vite 8 with HMR
 - **Backend API** — Dallas Urbanists REST API at `https://api.dallasurbanists.org`
-- **Calendar** — Meetup iCal feed (proxied via Vite to avoid CORS)
+- **Calendar** — Meetup iCal feed (proxied via `https://api.dallasurbganists.org/meetup-ical` to avoid CORS)
 - **Testing** — Playwright e2e tests with mocked API and calendar
 
-## Getting Started
+## Local Development
+
+Want to clone this project and work on it on your local machine? Here's how.
 
 ### Prerequisites
 
@@ -36,69 +38,44 @@ cd checkin-helper
 npm install
 ```
 
-### Development
+### Testing
 
-Start the dev server at `http://localhost:8080`:
+Use this command to create a localhost server so you can open the app in browser. Vite will hot-reload on file changes.
 
 ```bash
 npm start
 ```
 
-Vite will hot-reload on file changes.
-
-### Linting
-
-Check code style:
+Check code style and autofix linting issues.
 
 ```bash
 npm run lint
-```
-
-Auto-fix linting issues:
-
-```bash
 npm run fix
 ```
 
-### Build
-
-Create a production bundle:
+If you want, you can create a production bundle that's output to the `dist/` directory with this command. Note that running this manually on your end isn't necessary for deploying to this particular repo because we have a GitHub Actions workflow that automatically triggers build and deploy upon pushing to the `main` branch.
 
 ```bash
 npm run build
 ```
 
-Output is in `dist/`.
-
-### Testing
-
-Run build and lint checks:
+Run build and lint checks in one command. Use this for testing the stability of your build before pushing code.
 
 ```bash
 npm test
 ```
 
-Run end-to-end Playwright tests (mocks calendar and API):
+Run end-to-end Playwright tests (mocks calendar and API). Use this for full regression testing.
 
 ```bash
 npm run test:e2e
 ```
 
-Run only desktop tests:
+Run only desktop tests or only mobile tests. View HTML test report after a run.
 
 ```bash
 npx playwright test --project=desktop
-```
-
-Run only mobile tests:
-
-```bash
 npx playwright test --project=mobile
-```
-
-View the HTML test report after a run:
-
-```bash
 npx playwright show-report
 ```
 
@@ -151,25 +128,6 @@ The parser handles:
 - Cancelled events (filtered out)
 
 Times are always displayed in the event's original timezone, regardless of the user's locale.
-
-## Developer Deployment
-
-To deploy, build the app and serve the `dist/` directory with a web server. Ensure your server:
-
-1. Proxies `/meetup-ical` to `https://www.meetup.com/dallasurbanists/events/ical/`
-2. Allows CORS requests to the Dallas Urbanists API (or proxies those too)
-3. Serves `index.html` for all routes (since this is a single-page app with hash routing)
-
-Example nginx config snippet:
-
-```nginx
-location /meetup-ical {
-  proxy_pass https://www.meetup.com/dallasurbanists/events/ical/;
-}
-location / {
-  try_files $uri $uri/ /index.html;
-}
-```
 
 ## License
 
