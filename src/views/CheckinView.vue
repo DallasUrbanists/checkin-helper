@@ -22,7 +22,6 @@ const EMAIL_DOMAINS = [
   '@icloud.com',
   '@hotmail.com',
   '@proton.me',
-  '@sbcglobal.net'
 ]
 
 const route = useRoute()
@@ -98,8 +97,6 @@ async function onSubmit() {
 
 <template>
   <main>
-    <RouterLink to="/" class="d-inline-block mb-3">&larr; All events</RouterLink>
-
     <div v-if="status === 'loading' || status === 'idle'" class="d-flex align-items-center" role="status">
       <div class="spinner-border spinner-border-sm me-2" aria-hidden="true"></div>
       Loading event...
