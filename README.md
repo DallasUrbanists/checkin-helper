@@ -4,11 +4,11 @@ Fast, mobile-friendly event check-in tool for Dallas Urbanists. Register attende
 
 ## Features
 
-- **Event listing** — Fetches upcoming events from Meetup iCal feed, filtered by a 12-hour lookback and 24-hour lookahead window
+- **Event listing** — Fetches events from the Meetup iCal feed, categorized into **Current** (12-hour lookback to 24-hour lookahead) and **Future** events
 - **Quick check-in** — Touch-optimized form with name (required), email, phone, and zip (all optional except name)
 - **Smart contact matching** — Searches the Dallas Urbanists database by name; handles new contacts, existing contacts, and multiple matches
 - **Contact enrichment** — Appends new emails, phones, and zips to existing records without overwriting stored data
-- **Email domain shortcuts** — One-click buttons for common email providers (@gmail.com, @yahoo.com, @outlook.com, @icloud.com, @hotmail.com, @proton.me, @sbcglobal.net)
+- **Email domain shortcuts** — One-click buttons for common email providers (`@gmail.com`, `@yahoo.com`, `@outlook.com`, `@icloud.com`, `@hotmail.com`, `@proton.me`)
 - **Accessible & validated** — Blur-only validation, ARIA labels, phone formatting, real-time sanitization
 - **Mobile-first design** — Responsive Bootstrap 5 UI optimized for phone and tablet event check-in
 
@@ -72,10 +72,16 @@ Output is in `dist/`.
 
 ### Testing
 
-Run end-to-end tests (mocks calendar and API):
+Run build and lint checks:
 
 ```bash
-npx playwright test
+npm test
+```
+
+Run end-to-end Playwright tests (mocks calendar and API):
+
+```bash
+npm run test:e2e
 ```
 
 Run only desktop tests:
@@ -168,10 +174,3 @@ location / {
 ## License
 
 MIT
-
-```sh
-git clone https://github.com/twbs/examples.git
-cd examples/vue/
-npm install
-npm start
-```
