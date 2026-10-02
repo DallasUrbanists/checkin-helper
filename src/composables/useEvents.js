@@ -35,12 +35,22 @@ function load() {
   return pending
 }
 
-const upcoming = computed(() => {
+const current = computed(() => {
   const now = Date.now()
   return events.value
     .filter(e => {
       const start = e.start.getTime()
       return start >= now - LOOKBACK_MS && start <= now + LOOKAHEAD_MS
+    })
+    .sort((a, b) => a.start - b.start)
+})
+
+const future = computed(() => {
+  const now = Date.now()
+  return events.value
+    .filter(e => {
+      const start = e.start.getTime()
+      return start > now + LOOKAHEAD_MS
     })
     .sort((a, b) => a.start - b.start)
 })
@@ -62,5 +72,5 @@ export function findEvent(id) {
 }
 
 export function useEvents() {
-  return { events, upcoming, status, error, load, findEvent, formatEventDate }
+  return { events, current, upcoming: current, future, status, error, load, findEvent, formatEventDate }
 }

@@ -2,7 +2,7 @@
 import { onMounted } from 'vue'
 import { useEvents, formatEventDate } from '../composables/useEvents.js'
 
-const { upcoming, status, error, load } = useEvents()
+const { current, future, status, error, load } = useEvents()
 
 onMounted(load)
 </script>
@@ -21,18 +21,37 @@ onMounted(load)
       <button type="button" class="btn btn-sm btn-outline-danger ms-2" @click="load">Retry</button>
     </div>
 
-    <p v-else-if="!upcoming.length" class="text-muted">No upcoming events found.</p>
+    <template v-else>
+      <section class="mb-4">
+        <h3 class="h5 mb-2">Current</h3>
+        <p v-if="!current.length" class="text-muted">No current events ready for check-in at this time.</p>
+        <div v-else class="list-group">
+          <RouterLink
+            v-for="event in current"
+            :key="event.id"
+            :to="{ name: 'checkin', params: { eventId: event.id } }"
+            class="list-group-item list-group-item-action py-3"
+          >
+            <div class="fw-semibold">{{ event.title }}</div>
+            <div class="text-muted small">{{ formatEventDate(event) }}</div>
+          </RouterLink>
+        </div>
+      </section>
 
-    <div v-else class="list-group">
-      <RouterLink
-        v-for="event in upcoming"
-        :key="event.id"
-        :to="{ name: 'checkin', params: { eventId: event.id } }"
-        class="list-group-item list-group-item-action py-3"
-      >
-        <div class="fw-semibold">{{ event.title }}</div>
-        <div class="text-muted small">{{ formatEventDate(event) }}</div>
-      </RouterLink>
-    </div>
+      <section v-if="future.length" class="mb-4">
+        <h3 class="h5 mb-2">Future</h3>
+        <div class="list-group">
+          <RouterLink
+            v-for="event in future"
+            :key="event.id"
+            :to="{ name: 'checkin', params: { eventId: event.id } }"
+            class="list-group-item list-group-item-action py-3"
+          >
+            <div class="fw-semibold">{{ event.title }}</div>
+            <div class="text-muted small">{{ formatEventDate(event) }}</div>
+          </RouterLink>
+        </div>
+      </section>
+    </template>
   </main>
 </template>

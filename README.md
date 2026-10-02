@@ -146,7 +146,7 @@ The parser handles:
 
 Times are always displayed in the event's original timezone, regardless of the user's locale.
 
-## Deployment
+## Developer Deployment
 
 To deploy, build the app and serve the `dist/` directory with a web server. Ensure your server:
 

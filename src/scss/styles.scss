@@ -35,9 +35,17 @@ $offcanvas-box-shadow: 0 1rem 3rem rgba(0, 0, 0, .175);
 
 // Customize some defaults
 $body-color: #333;
-$body-bg: #fff;
+$body-bg: #f5f3ee;
 $border-radius: .4rem;
 $success: #7952b3;
+
+// Form Input Overrides
+$input-bg: #ffffff;             // <-- Sets default background for .form-control & .form-select
+$input-focus-bg: #ffffff;       // <-- (Optional) Background when focused (defaults to $input-bg)
+$input-disabled-bg: #e9ecef;    // <-- (Optional) Background when disabled
+
+// List Group Overrides
+$list-group-bg: white;
 
 // Required
 @import "bootstrap/scss/variables";

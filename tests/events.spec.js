@@ -5,18 +5,20 @@ const rows = page => page.locator('.list-group-item')
 const squash = text => text.replace(/\s+/g, ' ')
 
 test.describe('event list', () => {
-  test('shows only events from 12 hours ago to 24 hours ahead, in start order', async ({ page }) => {
+  test('shows current and future events in start order, omitting past and cancelled events', async ({ page }) => {
     await mockCalendar(page)
     await page.goto('/')
 
     await expect(page.getByRole('heading', { name: 'Choose an event' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Current Events' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Future Events' })).toBeVisible()
     await expect(rows(page).locator('.fw-semibold')).toHaveText([
       'Recent Event',
       'Upcoming Soon',
-      'Tomorrow Event'
+      'Tomorrow Event',
+      'Too Far Event'
     ])
     await expect(page.getByText('Too Old Event')).toHaveCount(0)
-    await expect(page.getByText('Too Far Event')).toHaveCount(0)
     await expect(page.getByText('Cancelled Event')).toHaveCount(0)
   })
 
@@ -35,12 +37,13 @@ test.describe('event list', () => {
     await expect(page.getByText('Loading events...')).toBeHidden()
   })
 
-  test('shows an empty message when nothing is in the window', async ({ page }) => {
+  test('shows an empty message when nothing is in the current window', async ({ page }) => {
     await mockCalendar(page, [{ id: '1', title: 'Far Future', start: hoursFromNow(200) }])
     await page.goto('/')
 
-    await expect(page.getByText('No upcoming events found.')).toBeVisible()
-    await expect(rows(page)).toHaveCount(0)
+    await expect(page.getByText('No current events at this time.')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Future Events' })).toBeVisible()
+    await expect(rows(page).locator('.fw-semibold')).toHaveText(['Far Future'])
   })
 
   test('converts TZID start times to Dallas time regardless of browser timezone', async ({ page }) => {
