@@ -56,7 +56,7 @@ function goBack() {
           </RouterLink>
         </template>
         <template v-else>
-          <div class="d-flex align-items-center">
+          <div class="d-flex align-items-center w-100">
             <button
               type="button"
               class="btn btn-link link-dark p-0 me-2 d-inline-flex align-items-center text-decoration-none"
