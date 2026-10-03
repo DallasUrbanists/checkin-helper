@@ -42,7 +42,7 @@ onMounted(load)
           <RouterLink
             v-for="event in future"
             :key="event.id"
-            :to="{ name: 'checkin', params: { eventId: event.id } }"
+            :to="{ name: 'event', params: { eventId: event.id } }"
             class="list-group-item list-group-item-action py-3"
           >
             <div class="fw-semibold">{{ event.title }}</div>

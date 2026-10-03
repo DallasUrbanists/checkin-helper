@@ -1,6 +1,8 @@
 import { createApp } from 'vue'
 import App from './App.vue'
-import router from './router.js'
+import router, { installAuthGuard } from './router.js'
+
+installAuthGuard(router)
 
 // Import our custom CSS
 import '../scss/styles.scss'

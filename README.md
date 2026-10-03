@@ -4,7 +4,9 @@ Fast, mobile-friendly event check-in tool for Dallas Urbanists. Register attende
 
 ## Features
 
-- **Event listing** — Fetches events from the Meetup iCal feed, categorized into **Current** (12-hour lookback to 24-hour lookahead) and **Future** events
+- **Event listing** — Fetches events from the Events API, caches them locally for 10 minutes, and categorizes them into **Current** (12-hour lookback to 24-hour lookahead) and **Future** events
+- **Firebase authentication** — Email/password and Google popup sign-in using `VITE_FIREBASE_*` configuration
+- **Authenticated profiles** — User/contact profile pages and editable contact details
 - **Quick check-in** — Touch-optimized form with name (required), email, phone, and zip (all optional except name)
 - **Smart contact matching** — Searches the Dallas Urbanists database by name; handles new contacts, existing contacts, and multiple matches
 - **Contact enrichment** — Appends new emails, phones, and zips to existing records without overwriting stored data
@@ -18,8 +20,8 @@ Fast, mobile-friendly event check-in tool for Dallas Urbanists. Register attende
 - **Styling** — Bootstrap 5.3 SCSS, custom utility classes
 - **Bundler** — Vite 8 with HMR
 - **Backend API** — Dallas Urbanists REST API at `https://api.dallasurbanists.org`
-- **Calendar** — Meetup iCal feed (proxied via `https://api.dallasurbganists.org/meetup-ical` to avoid CORS)
-- **Testing** — Playwright e2e tests with mocked API and calendar
+- **Events** — Dallas Urbanists Events API with browser local-storage caching
+- **Testing** — Playwright e2e tests with mocked API responses
 
 ## Local Development
 
@@ -97,11 +99,10 @@ src/
     AppFooter.vue    — Footer
     LoadingInterstitial.vue — Full-screen loading overlay
   composables/
-    useEvents.js     — Event fetching and filtering
+    useEvents.js     — Event API fetching, caching, and filtering
     useApi.js        — API request wrapper and contact/checkin methods
     useCheckin.js    — Form state and submission logic
     validation.js    — Field validators and input sanitizers
-    ical.js          — iCal feed parser
     contactUtils.js  — Contact display and payload builders
   scss/
     styles.scss      — Bootstrap overrides, custom utilities
@@ -115,19 +116,17 @@ tests/
 
 ## API Integration
 
-The app communicates with the [Dallas Urbanists API](https://github.com/DallasUrbanists/cloud-api-server). Configure the API base URL via the `VITE_API_BASE_URL` environment variable (defaults to `https://api.dallasurbanists.org`).
+The app communicates with the [Dallas Urbanists API](https://github.com/DallasUrbanists/cloud-api-server). Configure the API base URL via `VITE_API_BASE_URL` (defaults to `https://api.dallasurbanists.org`). Firebase is configured with `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, and `VITE_FIREBASE_APP_ID`. Authenticated API requests send the Firebase ID token as `Authorization: Bearer <token>`.
 
-## Calendar
+Profile assumptions: `/api/users/me` returns the signed-in user's contact, while `/api/contacts/{id}` and `/api/checkins?event_id=...` provide contact and event detail data. These endpoints can be adjusted in `src/composables/useApi.js` if the deployed API uses different names. API-key provisioning and rotation are managed in the API server's [authentication documentation](https://github.com/DallasUrbanists/cloud-api-server#rotating-api-keys); never commit API keys to this repository.
 
-The Meetup iCal feed is fetched from the URL specified by `VITE_ICAL_URL` (defaults to `/meetup-ical`). In local development, this route is proxied through Vite to work around CORS restrictions. For static hosting like GitHub Pages, configure `VITE_ICAL_URL` (e.g. in GitHub repository variables) to point to a CORS-enabled proxy endpoint or calendar feed.
+## Events
 
-The parser handles:
+Events are fetched from `GET /api/events` on the Dallas Urbanists API. Configure its base URL with `VITE_API_BASE_URL` (defaults to `https://api.dallasurbanists.org`).
 
-- Timezone-aware times (TZID, UTC with Z, floating times)
-- Folded lines and escaped characters
-- Cancelled events (filtered out)
+The app caches the API response in browser local storage for 10 minutes. A fresh cache prevents a network request; an expired cache is displayed immediately while the app refreshes it in the background. Updated results automatically replace the displayed list.
 
-Times are always displayed in the event's original timezone, regardless of the user's locale.
+Times are displayed in the event's configured timezone, regardless of the user's locale.
 
 ## License
 

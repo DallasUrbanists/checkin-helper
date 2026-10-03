@@ -3,7 +3,9 @@ import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useEvents } from '../composables/useEvents.js'
 import { useCheckin } from '../composables/useCheckin.js'
+import { useAuth } from '../composables/firebase.js'
 
+const { user, initials, signOut } = useAuth()
 const route = useRoute()
 const router = useRouter()
 const { findEvent, load } = useEvents()
@@ -70,6 +72,16 @@ function goBack() {
             <span v-if="eventTitle" class="navbar-text  p-0 text-truncate" aria-role="heading">{{ eventTitle }}</span>
           </div>
         </template>
+        <div class="ms-auto d-flex align-items-center gap-2">
+          <RouterLink v-if="isHome && user" to="/profile" class="btn btn-sm btn-outline-light rounded-circle" :aria-label="`Profile for ${user.email || 'user'}`">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-1" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0"/><path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8-7a7 7 0 0 0-5.468 11.368C3.242 11.226 5.017 10.5 8 10.5s4.758.726 5.468 1.868A7 7 0 0 0 8 1"/>
+            </svg>{{ initials }}
+          </RouterLink>
+          <RouterLink v-else-if="isHome" to="/login" class="btn btn-sm btn-outline-light">Login</RouterLink>
+          <RouterLink v-if="route.name === 'profile'" to="/profile/edit" class="btn btn-sm btn-outline-light">Edit</RouterLink>
+          <button v-if="user && route.name === 'profile'" type="button" class="btn btn-sm btn-link text-light" @click="signOut">Log out</button>
+        </div>
       </div>
     </nav>
   </header>

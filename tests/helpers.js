@@ -56,11 +56,29 @@ export function defaultEvents() {
   ]
 }
 
-export async function mockCalendar(page, events = defaultEvents()) {
-  await page.route('**/meetup-ical', route =>
-    route.fulfill({ contentType: 'text/calendar', body: buildIcal(events) })
-  )
+export async function mockEvents(page, events = defaultEvents(), { delay = 0, status = 200 } = {}) {
+  await page.route(`${API}/api/events**`, async route => {
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay))
+    if (status !== 200) return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ message: 'nope' }) })
+
+    const data = events
+      .filter(event => event.status !== 'CANCELLED')
+      .map(event => ({
+        id: event.id,
+        start_at: event.start.toISOString(),
+        end_at: null,
+        timezone: event.timezone || 'America/Chicago',
+        title: event.title || event.summary || 'Untitled event',
+        description: '',
+        location: (event.location || '').replace(/\\([,;\\])/g, '$1'),
+        url: '',
+        status: event.status || 'CONFIRMED'
+      }))
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data, count: data.length, total: data.length }) })
+  })
 }
+
+export const mockCalendar = mockEvents
 
 /**
  * Stubs the Dallas Urbanists API and records every call.
@@ -84,6 +102,7 @@ export async function mockApi(page, { contacts = [], delay = 0, fail = {} } = {}
     else if (url.pathname === '/api/contacts' && method === 'POST') kind = 'create'
     else if (/^\/api\/contacts\/\d+$/.test(url.pathname) && method === 'PUT') kind = 'update'
     else if (url.pathname === '/api/checkins' && method === 'POST') kind = 'checkin'
+    else if (url.pathname === '/api/events' && method === 'GET') return route.fallback()
     else return json(404, { error: 'Not Found', message: 'Unmocked endpoint' })
 
     const body = request.postDataJSON()

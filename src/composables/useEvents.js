@@ -1,7 +1,8 @@
 import { computed, ref } from 'vue'
-import { parseIcal } from './ical.js'
 
-const ICAL_URL = import.meta.env.VITE_ICAL_URL || '/meetup-ical'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.dallasurbanists.org'
+const CACHE_KEY = 'dallas-urbanists-events'
+const CACHE_TTL_MS = 10 * 60 * 1000
 const LOOKBACK_MS = 12 * 60 * 60 * 1000
 const LOOKAHEAD_MS = 24 * 60 * 60 * 1000
 
@@ -10,24 +11,72 @@ const status = ref('idle')
 const error = ref('')
 let pending = null
 
+function normalizeEvent(event) {
+  const start = new Date(event.start_at)
+  if (Number.isNaN(start.getTime())) return null
+
+  return {
+    id: String(event.id),
+    title: event.title || 'Untitled event',
+    description: event.description || '',
+    location: event.location || '',
+    url: event.url || '',
+    start,
+    end: event.end_at ? new Date(event.end_at) : null,
+    timeZone: event.timezone || undefined
+  }
+}
+
+function readCache() {
+  try {
+    const cached = JSON.parse(window.localStorage.getItem(CACHE_KEY) || 'null')
+    if (!cached || !Array.isArray(cached.events) || typeof cached.cachedAt !== 'number') return null
+    const cachedEvents = cached.events.map(normalizeEvent).filter(Boolean)
+    return { events: cachedEvents, fresh: Date.now() - cached.cachedAt < CACHE_TTL_MS }
+  } catch {
+    window.localStorage.removeItem(CACHE_KEY)
+    return null
+  }
+}
+
+function writeCache(apiEvents) {
+  try {
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify({ cachedAt: Date.now(), events: apiEvents }))
+  } catch {
+    // Event loading still works when storage is unavailable or full.
+  }
+}
+
 function load() {
-  if (status.value === 'loaded') return Promise.resolve()
   if (pending) return pending
 
-  status.value = 'loading'
-  error.value = ''
-  pending = fetch(ICAL_URL)
+  const cached = readCache()
+  if (cached) {
+    events.value = cached.events
+    status.value = 'loaded'
+    error.value = ''
+    if (cached.fresh) return Promise.resolve()
+  } else {
+    status.value = 'loading'
+    error.value = ''
+  }
+
+  pending = fetch(`${BASE_URL}/api/events?status=CONFIRMED&order=asc&limit=100`)
     .then(res => {
-      if (!res.ok) throw new Error(`Calendar request failed (${res.status})`)
-      return res.text()
+      if (!res.ok) throw new Error(`Events request failed (${res.status})`)
+      return res.json()
     })
-    .then(text => {
-      events.value = parseIcal(text)
+    .then(result => {
+      if (!Array.isArray(result.data)) throw new Error('Events response was invalid.')
+      const fetchedEvents = result.data.map(normalizeEvent).filter(Boolean)
+      events.value = fetchedEvents
+      writeCache(result.data)
       status.value = 'loaded'
+      error.value = ''
     })
     .catch(e => {
       error.value = e.message || 'Could not load events.'
-      status.value = 'error'
+      if (!events.value.length) status.value = 'error'
     })
     .finally(() => {
       pending = null
