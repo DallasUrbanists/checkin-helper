@@ -1,6 +1,6 @@
 {
   "name": "checkin-helper",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "description": "Tool for event check-in. Saves contacts to Dallas Urbanists database.",
   "author": "Hexel Colorado",
   "type": "module",
@@ -16,7 +16,6 @@
     "fix": "npm run lint -- --fix",
     "test": "npm run build && npm run lint",
     "test:e2e": "playwright test",
-
     "major": "npm version major && git push origin main --tags",
     "minor": "npm version minor && git push origin main --tags",
     "patch": "npm version patch && git push origin main --tags"
