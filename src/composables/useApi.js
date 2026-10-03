@@ -3,9 +3,11 @@ import { useAuth } from './firebase.js'
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.dallasurbanists.org'
 
 async function request(path, { method = 'GET', body } = {}) {
-  const token = await useAuth().getToken()
+  const { getToken, getAppCheckToken } = useAuth()
+  const token = await getToken()
+  const appCheckToken = await getAppCheckToken()
   const apiKey = import.meta.env.VITE_API_KEY
-  const headers = { ...(apiKey ? { 'X-API-Key': apiKey } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+  const headers = { ...(apiKey ? { 'X-API-Key': apiKey } : {}), ...(appCheckToken ? { 'X-Firebase-AppCheck': appCheckToken } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
   let res
   try {
     res = await fetch(`${BASE_URL}${path}`, {

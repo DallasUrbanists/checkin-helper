@@ -1,5 +1,6 @@
 import { getApp, getApps, initializeApp } from 'firebase/app'
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut, createUserWithEmailAndPassword } from 'firebase/auth'
+import { getToken as getAppCheckToken, initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check'
 import { computed, ref } from 'vue'
 
 const config = {
@@ -16,10 +17,21 @@ const user = ref(null)
 const ready = ref(!configured)
 const error = ref('')
 let auth = null
+let appCheck = null
 
 if (configured) {
   const app = getApps().length ? getApp() : initializeApp(config)
   auth = getAuth(app)
+
+  const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY
+  if (siteKey) {
+    if (import.meta.env.DEV) globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = true
+    appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(siteKey),
+      isTokenAutoRefreshEnabled: true
+    })
+  }
+
   onAuthStateChanged(auth, value => { user.value = value; ready.value = true })
 }
 
@@ -44,6 +56,7 @@ export function useAuth() {
     register: (email, password) => run(() => createUserWithEmailAndPassword(auth, email, password)),
     signInWithGoogle: () => run(() => signInWithPopup(auth, new GoogleAuthProvider())),
     signOut: () => run(() => signOut(auth)),
-    getToken: async () => user.value ? user.value.getIdToken() : null
+    getToken: async () => user.value ? user.value.getIdToken() : null,
+    getAppCheckToken: async () => appCheck ? getAppCheckToken(appCheck) : null
   }
 }
