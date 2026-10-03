@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LoadingInterstitial from '../components/LoadingInterstitial.vue'
 import { useCheckin } from '../composables/useCheckin.js'
@@ -34,6 +34,7 @@ const event = computed(() => findEvent(eventId))
 
 const form = reactive({ name: '', email: '', phone: '', zip: '' })
 const errors = reactive({ name: '', email: '', phone: '', zip: '' })
+const storageKey = `checkin-form-${eventId}`
 
 const validators = {
   name: validateName,
@@ -45,7 +46,19 @@ const validators = {
 // Recomputed on every input event, so it tracks each key press.
 const showDomains = computed(() => !form.email || !!validateEmail(form.email))
 
-onMounted(load)
+onMounted(() => {
+  load()
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(storageKey) || 'null')
+    if (saved && typeof saved === 'object') Object.assign(form, saved)
+  } catch {
+    window.localStorage.removeItem(storageKey)
+  }
+})
+
+watch(form, (value) => {
+  window.localStorage.setItem(storageKey, JSON.stringify(value))
+}, { deep: true })
 
 // Feedback appears on blur and is cleared again once the user resumes typing.
 function validateField(field) {

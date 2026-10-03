@@ -18,6 +18,7 @@ const submitted = computed(() => state.form ?? {})
 
 function another() {
   const eventId = state.eventId
+  window.localStorage.removeItem(`checkin-form-${eventId}`)
   reset()
   router.push({ name: 'checkin', params: { eventId } })
 }
