@@ -1,5 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import DOMPurify from 'dompurify'
+import { marked } from 'marked'
 import { useRoute, useRouter } from 'vue-router'
 import { useEvents, formatEventDate } from '../composables/useEvents.js'
 import { useApi } from '../composables/useApi.js'
@@ -11,6 +13,10 @@ const checkins = ref([])
 const error = ref('')
 const loading = ref(true)
 const event = computed(() => findEvent(String(route.params.eventId)))
+const descriptionHtml = computed(() => {
+  const description = event.value?.description
+  return description ? DOMPurify.sanitize(marked.parse(String(description))) : ''
+})
 const isMultiDay = computed(() => Boolean(event.value?.end && event.value.end.toDateString() !== event.value.start.toDateString()))
 
 function checkinContact(checkin) {
@@ -62,7 +68,7 @@ onMounted(async () => {
       <h1 class="h3">{{ event.title }}</h1>
       <p class="text-muted">{{ formatEventDate(event) }}</p>
       <p v-if="event.location">{{ event.location }}</p>
-      <p v-if="event.description">{{ event.description }}</p>
+      <div v-if="descriptionHtml" class="event-description" v-html="descriptionHtml"></div>
       <RouterLink class="btn btn-primary mb-4" :to="{ name: 'checkin', params: { eventId: event.id } }">Check in someone</RouterLink>
       <h2 class="h5">Check-ins <span class="badge text-bg-secondary">{{ checkins.length }}</span></h2>
       <div v-if="loading" class="text-muted">Loading check-ins...</div>
