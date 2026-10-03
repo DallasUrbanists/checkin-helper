@@ -69,10 +69,10 @@ onMounted(async () => {
       <div v-else-if="error" class="alert alert-warning">{{ error }}</div>
       <div v-else-if="!checkins.length" class="text-muted">No check-ins yet.</div>
       <div v-else class="table-responsive">
-        <table class="table table-hover align-middle">
+        <table class="table table-hover align-middle w-100">
           <thead><tr><th scope="col">Name</th><th scope="col">Zip</th><th scope="col">Time</th></tr></thead>
-          <tbody>
-            <tr v-for="checkin in checkins" :key="checkin.id" role="link" tabindex="0" @click="openContact(checkin)" @keydown.enter="openContact(checkin)">
+          <tbody class="table-group-divider">
+            <tr v-for="checkin in checkins" :key="checkin.id" class="checkin-row" role="link" tabindex="0" @click="openContact(checkin)" @keydown.enter="openContact(checkin)">
                           <td><span class="text-decoration-underline">{{ contactName(checkin) }}</span></td>
               <td>{{ checkinContact(checkin)?.zip_home || '' }}</td>
               <td>{{ formatTime(checkin.submitted_on || checkin.created_at || checkin.checked_in_at) }}</td>
@@ -83,3 +83,9 @@ onMounted(async () => {
     </template>
   </main>
 </template>
+
+<style scoped>
+.checkin-row {
+  cursor: pointer;
+}
+</style>

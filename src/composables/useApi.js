@@ -34,7 +34,7 @@ export function useApi() {
     createContact: payload => request('/api/contacts', { method: 'POST', body: payload }),
     updateContact: (id, payload) => request(`/api/contacts/${id}`, { method: 'PUT', body: payload }),
     createCheckin: payload => request('/api/checkins', { method: 'POST', body: payload }),
-    getEventCheckins: eventId => request(`/api/checkins?event_id=${encodeURIComponent(eventId)}`),
-    getContactCheckins: contactId => request(`/api/checkins?contact_id=${encodeURIComponent(contactId)}`)
+    getEventCheckins: eventId => request(`/api/checkins?event_id=${encodeURIComponent(eventId)}&include_contact=full`),
+    getContactCheckins: contactId => request(`/api/checkins?contact_id=${encodeURIComponent(contactId)}&include_contact=full`)
   }
 }
