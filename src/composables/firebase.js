@@ -25,7 +25,9 @@ if (configured) {
 
   const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY
   if (siteKey) {
-    if (import.meta.env.DEV) globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = true
+    if (import.meta.env.DEV) {
+      globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN || true
+    }
     appCheck = initializeAppCheck(app, {
       provider: new ReCaptchaEnterpriseProvider(siteKey),
       isTokenAutoRefreshEnabled: true

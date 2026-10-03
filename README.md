@@ -120,7 +120,7 @@ The app communicates with the [Dallas Urbanists API](https://github.com/DallasUr
 
 Profile assumptions: `/api/users/me` returns the signed-in user's contact, while `/api/contacts/{id}` and `/api/checkins?event_id=...` provide contact and event detail data. These endpoints can be adjusted in `src/composables/useApi.js` if the deployed API uses different names. API-key provisioning and rotation are managed in the API server's [authentication documentation](https://github.com/DallasUrbanists/cloud-api-server#rotating-api-keys); never commit API keys to this repository.
 
-API requests include `X-API-Key` from `VITE_API_KEY` and, when configured, `X-Firebase-AppCheck` from Firebase App Check. This app uses the Firebase Fraud Defense (reCAPTCHA Enterprise) provider. Set the reCAPTCHA Enterprise site key as `VITE_RECAPTCHA_SITE_KEY` for production App Check, register the production hostname in Firebase Console, and use the App Check debug token during local development. Never expose the reCAPTCHA secret key in the browser.
+API requests include `X-API-Key` from `VITE_API_KEY` and, when configured, `X-Firebase-AppCheck` from Firebase App Check. This app uses the Firebase Fraud Defense (reCAPTCHA Enterprise) provider. Set the reCAPTCHA Enterprise site key as `VITE_RECAPTCHA_SITE_KEY` for production App Check, register the production hostname in Firebase Console, and use `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` for local development. Never expose the reCAPTCHA secret key in the browser.
 
 ## Events
 
