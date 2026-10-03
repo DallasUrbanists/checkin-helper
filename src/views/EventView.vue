@@ -69,7 +69,7 @@ onMounted(async () => {
       <p class="text-muted">{{ formatEventDate(event) }}</p>
       <p v-if="event.location">{{ event.location }}</p>
       <div v-if="descriptionHtml" class="event-description" v-html="descriptionHtml"></div>
-      <RouterLink class="btn btn-primary mb-4" :to="{ name: 'checkin', params: { eventId: event.id } }">Check in someone</RouterLink>
+      <RouterLink class="btn btn-primary mb-4" :to="{ name: 'checkin', params: { eventId: event.id } }">Check in for event</RouterLink>
       <h2 class="h5">Check-ins <span class="badge text-bg-secondary">{{ checkins.length }}</span></h2>
       <div v-if="loading" class="text-muted">Loading check-ins...</div>
       <div v-else-if="error" class="alert alert-warning">{{ error }}</div>
