@@ -57,6 +57,10 @@ export function useAuth() {
     signInWithGoogle: () => run(() => signInWithPopup(auth, new GoogleAuthProvider())),
     signOut: () => run(() => signOut(auth)),
     getToken: async () => user.value ? user.value.getIdToken() : null,
-    getAppCheckToken: async () => appCheck ? getAppCheckToken(appCheck) : null
+    getAppCheckToken: async () => {
+      if (!appCheck) return null
+      const result = await getAppCheckToken(appCheck)
+      return result?.token || null
+    }
   }
 }
