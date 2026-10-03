@@ -16,6 +16,7 @@
     "fix": "npm run lint -- --fix",
     "test": "npm run build && npm run lint",
     "test:e2e": "playwright test",
+    "routes": "node scripts/list-routes.js",
     "major": "npm version major && git push origin main --tags",
     "minor": "npm version minor && git push origin main --tags",
     "patch": "npm version patch && git push origin main --tags"
