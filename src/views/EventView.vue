@@ -5,6 +5,7 @@ import { marked } from 'marked'
 import { useRoute, useRouter } from 'vue-router'
 import { useEvents, formatEventDate } from '../composables/useEvents.js'
 import { useApi } from '../composables/useApi.js'
+import ExpandablePreview from '../components/ExpandablePreview.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -50,6 +51,7 @@ function ordinal(day) {
 
 onMounted(async () => {
   await load()
+
   try {
     const result = await useApi().getEventCheckins(route.params.eventId)
     checkins.value = Array.isArray(result) ? result : (result?.data || [])
@@ -59,6 +61,7 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
 </script>
 
 <template>
@@ -68,7 +71,9 @@ onMounted(async () => {
       <h1 class="h3">{{ event.title }}</h1>
       <p class="text-muted">{{ formatEventDate(event) }}</p>
       <p v-if="event.location">{{ event.location }}</p>
-      <div v-if="descriptionHtml" class="event-description" v-html="descriptionHtml"></div>
+      <ExpandablePreview v-if="descriptionHtml" class="event-description mb-4">
+        <div v-html="descriptionHtml"></div>
+      </ExpandablePreview>
       <RouterLink class="btn btn-primary mb-4" :to="{ name: 'checkin', params: { eventId: event.id } }">Check in for event</RouterLink>
       <h2 class="h5">Check-ins <span class="badge text-bg-secondary">{{ checkins.length }}</span></h2>
       <div v-if="loading" class="text-muted">Loading check-ins...</div>
