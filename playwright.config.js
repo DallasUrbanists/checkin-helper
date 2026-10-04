@@ -18,6 +18,9 @@ export default defineConfig({
   webServer: {
     command: 'npm start -- --port 4180 --strictPort',
     url: 'http://localhost:4180',
-    reuseExistingServer: false
+    reuseExistingServer: false,
+    env: {
+      VITE_RECAPTCHA_SITE_KEY: ''
+    }
   }
 })

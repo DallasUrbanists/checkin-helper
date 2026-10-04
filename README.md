@@ -67,7 +67,7 @@ Run build and lint checks in one command. Use this for testing the stability of 
 npm test
 ```
 
-Run end-to-end Playwright tests (mocks calendar and API). Use this for full regression testing.
+Run end-to-end Playwright tests (mocks calendar and API). The Playwright web server explicitly sets `VITE_RECAPTCHA_SITE_KEY` to an empty value so tests do not initialize reCAPTCHA; production configuration is unaffected.
 
 ```bash
 npm run test:e2e
