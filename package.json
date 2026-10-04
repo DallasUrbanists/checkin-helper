@@ -1,6 +1,6 @@
 {
   "name": "checkin-helper",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Tool for event check-in. Saves contacts to Dallas Urbanists database.",
   "author": "Hexel Colorado",
   "type": "module",
