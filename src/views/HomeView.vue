@@ -1,8 +1,25 @@
 <script setup>
-import { onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useEvents, formatEventDate } from '../composables/useEvents.js'
 
-const { current, future, status, error, load } = useEvents()
+const { current, future, past, status, error, load } = useEvents()
+const tabs = ['Future', 'Past']
+const activeTab = ref('Future')
+const displayedEvents = computed(() => activeTab.value === 'Future' ? future.value : past.value)
+
+function handleTabKey(event) {
+  const index = tabs.indexOf(activeTab.value)
+  const nextIndex = {
+    ArrowRight: (index + 1) % tabs.length,
+    ArrowLeft: (index + tabs.length - 1) % tabs.length,
+    Home: 0,
+    End: tabs.length - 1
+  }[event.key]
+  if (nextIndex === undefined) return
+  event.preventDefault()
+  activeTab.value = tabs[nextIndex]
+  event.currentTarget.parentElement.querySelectorAll('[role="tab"]')[nextIndex].focus()
+}
 
 onMounted(load)
 </script>
@@ -36,11 +53,36 @@ onMounted(load)
         </div>
       </section>
 
-      <section v-if="future.length" class="mb-4">
-        <h3 class="h5 mb-2">Future</h3>
-        <div class="list-group">
+      <div class="nav nav-tabs mb-3" role="tablist" aria-label="Event history">
+        <button
+          v-for="tab in tabs"
+          :id="`events-${tab.toLowerCase()}-tab`"
+          :key="tab"
+          type="button"
+          role="tab"
+          class="nav-link"
+          :class="{ active: activeTab === tab }"
+          :aria-selected="activeTab === tab"
+          aria-controls="events-tab-panel"
+          :tabindex="activeTab === tab ? 0 : -1"
+          @click="activeTab = tab"
+          @keydown="handleTabKey"
+        >
+          {{ tab }}
+        </button>
+      </div>
+
+      <section
+        id="events-tab-panel"
+        class="mb-4"
+        role="tabpanel"
+        :aria-labelledby="`events-${activeTab.toLowerCase()}-tab`"
+        tabindex="0"
+      >
+        <p v-if="!displayedEvents.length" class="text-muted">No {{ activeTab.toLowerCase() }} events.</p>
+        <div v-else class="list-group">
           <RouterLink
-            v-for="event in future"
+            v-for="event in displayedEvents"
             :key="event.id"
             :to="{ name: 'event', params: { eventId: event.id } }"
             class="list-group-item list-group-item-action py-3"

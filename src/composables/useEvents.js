@@ -104,6 +104,13 @@ const future = computed(() => {
     .sort((a, b) => a.start - b.start)
 })
 
+const past = computed(() => {
+  const now = Date.now()
+  return events.value
+    .filter(event => event.start.getTime() < now - LOOKBACK_MS)
+    .sort((first, second) => second.start - first.start)
+})
+
 export function formatEventDate(event) {
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
@@ -121,5 +128,5 @@ export function findEvent(id) {
 }
 
 export function useEvents() {
-  return { events, current, upcoming: current, future, status, error, load, findEvent, formatEventDate }
+  return { events, current, upcoming: current, future, past, status, error, load, findEvent, formatEventDate }
 }

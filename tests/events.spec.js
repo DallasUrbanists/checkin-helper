@@ -5,12 +5,12 @@ const rows = page => page.locator('.list-group-item')
 const squash = text => text.replace(/\s+/g, ' ')
 
 test.describe('event list', () => {
-  test('shows current and future events in start order, omitting past and cancelled events', async ({ page }) => {
+  test('shows current and future events by default and switches to past events', async ({ page }) => {
     await mockEvents(page)
     await page.goto('/')
 
     await expect(page.getByRole('heading', { name: 'Current' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Future' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Future' })).toHaveAttribute('aria-selected', 'true')
     await expect(rows(page).locator('.fw-semibold')).toHaveText([
       'Recent Event',
       'Upcoming Soon',
@@ -19,11 +19,49 @@ test.describe('event list', () => {
     ])
     await expect(page.getByText('Too Old Event')).toHaveCount(0)
     await expect(page.getByText('Cancelled Event')).toHaveCount(0)
+
+    await page.getByRole('tab', { name: 'Past', exact: true }).click()
+    await expect(page.getByRole('tab', { name: 'Past', exact: true })).toHaveAttribute('aria-selected', 'true')
+    await expect(rows(page).locator('.fw-semibold')).toHaveText([
+      'Recent Event', 'Upcoming Soon', 'Tomorrow Event', 'Too Old Event'
+    ])
+    await expect(page.getByText('Too Far Event')).toHaveCount(0)
+    await expect(page.getByText('Cancelled Event')).toHaveCount(0)
+
+    await page.getByRole('tab', { name: 'Future' }).click()
+    await expect(page.getByText('Too Far Event')).toBeVisible()
+    await expect(page.getByText('Too Old Event')).toHaveCount(0)
+  })
+
+  test('orders past events newest first and links to event details', async ({ page }) => {
+    await mockEvents(page, [
+      { id: '1', title: 'Older Event', start: hoursFromNow(-72) },
+      { id: '2', title: 'Recent Past Event', start: hoursFromNow(-13) }
+    ])
+    await page.goto('/')
+    await page.getByRole('tab', { name: 'Past', exact: true }).click()
+
+    await expect(rows(page).locator('.fw-semibold')).toHaveText(['Recent Past Event', 'Older Event'])
+    await expect(page.getByRole('link', { name: /Recent Past Event/ })).toHaveAttribute('href', '#/events/2')
+  })
+
+  test('shows empty tab states and supports keyboard tab navigation', async ({ page }) => {
+    await mockEvents(page, [])
+    await page.goto('/')
+
+    await expect(page.getByText('No future events.')).toBeVisible()
+    await page.getByRole('tab', { name: 'Future' }).focus()
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByRole('tab', { name: 'Past', exact: true })).toBeFocused()
+    await expect(page.getByText('No past events.')).toBeVisible()
+    await page.keyboard.press('Home')
+    await expect(page.getByRole('tab', { name: 'Future' })).toBeFocused()
+    await expect(page.getByText('No future events.')).toBeVisible()
   })
 
   test('shows a loading indicator while the calendar is fetched', async ({ page }) => {
     await mockEvents(page, [{ id: '1', title: 'Slow Event', start: hoursFromNow(1) }], { delay: 500 })
-    await page.goto('/')
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByText('Loading events...')).toBeVisible()
     await expect(page.getByText('Slow Event')).toBeVisible()
@@ -35,7 +73,7 @@ test.describe('event list', () => {
     await page.goto('/')
 
     await expect(page.getByText('No current events ready for check-in at this time.')).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Future' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Future' })).toBeVisible()
     await expect(rows(page).locator('.fw-semibold')).toHaveText(['Far Future'])
   })
 
@@ -111,7 +149,7 @@ test.describe('event list', () => {
       }))
     })
     await mockEvents(page, [{ id: '1', title: 'Updated Event', start: hoursFromNow(1) }], { delay: 500 })
-    await page.goto('/')
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByText('Cached Event')).toBeVisible()
     await expect(page.getByText('Loading events...')).toBeHidden()
