@@ -46,6 +46,7 @@ function linked(row) { return fullName(row) && contactId(row) != null && Boolean
 function shownName(row) {
   const name = contactName(row)
   if (fullName(row)) return name.toUpperCase()
+  if (!/\s/.test(name)) return name.toUpperCase()
   return name === 'Anonymous attendee' ? '—' : name.split(/\s+/).filter(Boolean).map(part => part[0]).join('').toUpperCase()
 }
 function zipList(row) {
@@ -226,8 +227,8 @@ watch(operations.lastReceipt, receipt => {
         <div v-if="!loading && !checkins.length" class="text-muted">No check-ins yet.</div>
         <form v-if="checkins.length && !loading" @submit.prevent="save">
           <p v-if="editing" id="time-guidance" class="small text-muted">Times are in {{ event.timeZone || 'an unavailable event timezone' }}. Include the date. Ambiguous or nonexistent daylight-saving times must be corrected. {{ bounds ? '' : 'Time editing is unavailable for this event.' }}</p>
-          <div ref="tableScroll" class="table-responsive attendance-scroll" :class="{ 'has-right-shadow': scrollState.right }" @scroll="updateScrollState">
-            <table class="table table-hover align-middle attendance-table" :class="{ 'has-selection': staff && !editing, 'has-left-shadow': scrollState.left }">
+          <div ref="tableScroll" class="table-responsive attendance-scroll" :class="{ 'staff-table': staff, 'has-right-shadow': scrollState.right }" @scroll="updateScrollState">
+            <table class="table align-middle attendance-table" :class="{ 'staff-table': staff, 'table-hover': staff, 'has-selection': staff && !editing, 'has-left-shadow': scrollState.left }">
               <thead><tr>
                 <th v-if="staff && !editing" class="attendance-select" scope="col"><input type="checkbox" class="form-check-input" aria-label="Select all attendees" :checked="allSelected" :indeterminate="selectedRows.length > 0 && !allSelected" :disabled="operations.busy.value || Boolean(operations.pending.value)" @change="toggleAll($event.target.checked)"></th>
                 <th class="attendance-name" scope="col">Name</th><th v-if="staff" scope="col">Email</th><th v-if="staff" scope="col">Phone</th><th scope="col">Zip</th><th scope="col">Time</th>
@@ -294,7 +295,7 @@ watch(operations.lastReceipt, receipt => {
   background: var(--bs-primary);
   border-radius: 999px;
 }
-.attendance-scroll.has-right-shadow::after {
+.attendance-scroll.staff-table.has-right-shadow::after {
   position: absolute;
   top: 0;
   right: 0;
@@ -365,4 +366,27 @@ watch(operations.lastReceipt, receipt => {
 }
 .attendance-dialog { width: min(32rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); }
 .attendance-dialog::backdrop { background: rgb(0 0 0 / 50%); }
+.attendance-scroll:not(.staff-table) {
+  width: 100%;
+  margin-left: 0;
+  overflow-x: visible;
+}
+.attendance-scroll:not(.staff-table) .attendance-table {
+  width: 100%;
+  min-width: 0;
+  padding-right: 0;
+  white-space: normal;
+}
+.attendance-scroll:not(.staff-table) .attendance-table th,
+.attendance-scroll:not(.staff-table) .attendance-table td {
+  white-space: normal;
+}
+.attendance-scroll:not(.staff-table) .attendance-table td:last-child,
+.attendance-scroll:not(.staff-table) .attendance-table th:last-child { padding-right: .75rem; }
+.attendance-scroll:not(.staff-table) .attendance-select,
+.attendance-scroll:not(.staff-table) .attendance-name {
+  position: static;
+  background: transparent;
+  box-shadow: none;
+}
 </style>
