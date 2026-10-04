@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { fileURLToPath } from 'node:url'
 
 
 // Meetup's iCal feed sends no CORS headers, so the browser reads it through this proxy
@@ -12,7 +13,13 @@ const icalProxy = {
 }
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ command, mode }) => ({
+  resolve: {
+    alias: command === 'serve' && mode === 'e2e' && process.env.CHECKIN_E2E === '1' ? [
+      { find: /.*\/composables\/firebase\.js$|^\.\/firebase\.js$/, replacement: fileURLToPath(new URL('./tests/auth-fixture.js', import.meta.url)) },
+      { find: /.*\/composables\/operationCapability\.js$|^\.\/operationCapability\.js$/, replacement: fileURLToPath(new URL('./tests/operation-capability-fixture.js', import.meta.url)) }
+    ] : []
+  },
   base: '/checkin-helper/',
   plugins: [vue()],
   server: {
@@ -35,4 +42,4 @@ export default defineConfig({
         },
     },
   },
-})
+}))

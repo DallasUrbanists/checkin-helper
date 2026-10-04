@@ -1,4 +1,4 @@
-const API = 'https://api.dallasurbanists.org'
+export const API = 'http://127.0.0.1:4199'
 
 const CORS = {
   'access-control-allow-origin': '*',

@@ -130,6 +130,35 @@ The app caches the API response in browser local storage for 10 minutes. A fresh
 
 Times are displayed in the event's configured timezone, regardless of the user's locale.
 
+## EventView Phase One
+
+Attendance now uses reactive Firebase staff claims (`staff: true`, `role: "staff"`, or `roles` containing `staff`). Claim resolution fails closed; account, role, and event changes clear privileged rows and drafts, and stale requests are ignored. Staff see full uppercase profile links, emails, formatted phones, and home-first ZIP lists. Public attendees see initials and Home ZIP only; a server-confirmed `is_self: true` row alone gets a full-name profile link. Attendance is never cached in browser storage. `/api/users/me` remains an existing profile assumption, not an ownership or staff-authorization source.
+
+The editor uses shared contact drafts and independent check-in times. It validates comma-separated values without truncating them, omits protected and unchanged fields, supports explicit nullable clears, and creates no operation for normalized no-op saves. Temporal converts event-zone wall-clock times, checks inclusive bounds and rejects DST gaps/ambiguities. Timestamp inputs use text rather than native datetime controls to preserve microsecond/nanosecond strings; untouched timestamps are never rewritten, including historical out-of-range values. Discard sends no requests; dirty navigation warns. Selection and accessible removal confirmation operate on check-in IDs; removal never deletes contacts.
+
+**Production gate:** `src/composables/operationCapability.js` is permanently false for this release. Edit, Save, Remove, and application Undo cannot send live EventView mutations; there is no ordinary PUT/DELETE fallback. Existing check-in creation and profile editing are unchanged and are not added to Undo.
+
+`src/composables/eventOperations.js` confines the provisional `/api/operation-groups` contract: immutable deduplicated manifests, revisions, grouped staging, request-specific idempotency keys, atomic commit, cancellation, and status/history recovery after uncertain responses. History is server-owned for 30 days from the original commit. Only transient metadata and in-flight forward requests exist in memory; there is no localStorage undo stack, restoration logic, or browser history size limit. Logout clears that transient state; same-account login rediscovers retained server history.
+
+Global notifications offer Undo on successful actions. Ctrl-Z/Cmd-Z select the latest still-committed source-wide EventView action in server order, including blocked entries; requests include expected latest identity/order/scope. Inputs and contenteditable descendants keep native Undo, Shift-redo is untouched, and dirty drafts prevent application Undo. Server conflicts/expiry never cause fallback to an older action.
+
+### Isolated verification
+
+```bash
+npm run test:unit
+npm test
+npx playwright test event-view.spec.js event-history.spec.js event-boundaries.spec.js
+npm run test:e2e
+```
+
+Playwright points the API at the isolated loopback address `http://127.0.0.1:4199`; unmocked calls cannot reach production. Its development server alone uses `CHECKIN_E2E=1` and `--mode e2e` to alias controlled auth and operation-capability fixtures. Build commands never activate these aliases, even with those settings. Tests cover desktop Chrome and Pixel 7, stateful atomic-operation simulation, privacy/auth/route races, selection/drafts, failures and uncertain outcomes, retained/paginated history, sequential Undo, account isolation, blocked latest actions, expiry, and stale cross-tab selection. Mock transactions do not prove PostgreSQL atomicity, exact restoration, lineage, permission enforcement, or deployed CORS behavior.
+
+### Phase Two integration gates
+
+Before enabling real mutations, verify delivered schemas/envelopes and state names, begin action/event context, pagination cursors and descending opaque order, revision/ETag format, required grouping/idempotency/precondition headers, metadata-only receipts, and latest-action Undo payloads. The adapter currently uses `manifest: [{resource,id,action}]`, top-level `action_type`/`event_id`, `group_id`, history `data`/`groups`/`items` plus `next_cursor`, and `expected_latest_group_id`/`expected_latest_commit_order`/`scope`. These are proposed shapes, not evidence of a deployed contract.
+
+Confirm one-mutation-per-target staging, server group/payload/open-lifetime limits, nullable clearing compatibility, and terminal/idempotency retention. Implement and independently verify trusted self markers, partial contact updates, check-in timestamp updates, revisions, durable staging, atomic complete-manifest commit/Undo, account-bound 30-day history, exact restoration/lineage, stale-latest checks, and browser CORS. Only then replace the capability gate with a verified deployment/capability mechanism and run isolated real-server integration tests. Never enable by a browser flag or use production records for mutation verification.
+
 ## License
 
 MIT

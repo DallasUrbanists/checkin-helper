@@ -1,5 +1,5 @@
 import { getApp, getApps, initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut, createUserWithEmailAndPassword } from 'firebase/auth'
+import { getAuth, GoogleAuthProvider, onIdTokenChanged, signInWithEmailAndPassword, signInWithPopup, signOut, createUserWithEmailAndPassword } from 'firebase/auth'
 import { getToken as getAppCheckToken, initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check'
 import { computed, ref } from 'vue'
 
@@ -16,6 +16,13 @@ const configured = Object.values(config).every(Boolean)
 const user = ref(null)
 const ready = ref(!configured)
 const error = ref('')
+const claimsReady = ref(!configured)
+const claims = ref(null)
+const authVersion = ref(0)
+const isStaff = computed(() => Boolean(user.value && claimsReady.value && (
+  claims.value?.staff === true || claims.value?.role === 'staff' ||
+  (Array.isArray(claims.value?.roles) && claims.value.roles.includes('staff'))
+)))
 let auth = null
 let appCheck = null
 
@@ -34,7 +41,25 @@ if (configured) {
     })
   }
 
-  onAuthStateChanged(auth, value => { user.value = value; ready.value = true })
+  onIdTokenChanged(auth, async value => {
+    const version = ++authVersion.value
+    claims.value = null
+    claimsReady.value = false
+    user.value = value
+    ready.value = true
+    if (!value) {
+      claimsReady.value = true
+      return
+    }
+    try {
+      const result = await value.getIdTokenResult()
+      if (version === authVersion.value && user.value?.uid === value.uid) claims.value = result.claims
+    } catch {
+      // A failed claim lookup must never grant staff access.
+    } finally {
+      if (version === authVersion.value && user.value?.uid === value.uid) claimsReady.value = true
+    }
+  })
 }
 
 export function useAuth() {
@@ -53,7 +78,7 @@ export function useAuth() {
   }
 
   return {
-    user, initials, ready, error, configured,
+    user, initials, ready, claimsReady, isStaff, authVersion, error, configured,
     signIn: (email, password) => run(() => signInWithEmailAndPassword(auth, email, password)),
     register: (email, password) => run(() => createUserWithEmailAndPassword(auth, email, password)),
     signInWithGoogle: () => run(() => signInWithPopup(auth, new GoogleAuthProvider())),

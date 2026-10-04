@@ -1,67 +1,211 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { useEvents, formatEventDate } from '../composables/useEvents.js'
 import { useApi } from '../composables/useApi.js'
+import { useAuth } from '../composables/firebase.js'
+import { displayPhone, phoneDigits } from '../composables/contactUtils.js'
+import { buildMutations, contactFor, createDrafts, draftDirty, rowTimestamp, timeBounds } from '../composables/eventDrafts.js'
+import { useEventOperations } from '../composables/eventOperations.js'
 import ExpandablePreview from '../components/ExpandablePreview.vue'
 
 const route = useRoute()
-const router = useRouter()
 const { findEvent, load } = useEvents()
+const auth = useAuth()
+const operations = useEventOperations()
 const checkins = ref([])
 const error = ref('')
 const loading = ref(true)
+const selection = ref(new Set())
+const tableScroll = ref(null)
+const scrollState = ref({ left: false, right: false })
+const editing = ref(false)
+const drafts = ref(null)
+const dialog = ref(null)
+let generation = 0
+let removeTrigger = null
 const event = computed(() => findEvent(String(route.params.eventId)))
+const staff = auth.isStaff
+const dirty = computed(() => editing.value && drafts.value && draftDirty(drafts.value))
+const bounds = computed(() => timeBounds(event.value))
+const selectedRows = computed(() => checkins.value.filter(row => selection.value.has(String(row.id))))
+const allSelected = computed(() => checkins.value.length > 0 && selectedRows.value.length === checkins.value.length)
+const mutationsAllowed = computed(() => operations.enabled && staff.value && !operations.busy.value && !operations.pending.value)
 const descriptionHtml = computed(() => {
   const description = event.value?.description
   return description ? DOMPurify.sanitize(marked.parse(String(description))) : ''
 })
-const isMultiDay = computed(() => Boolean(event.value?.end && event.value.end.toDateString() !== event.value.start.toDateString()))
 
-function checkinContact(checkin) {
-  return checkin.contact || checkin.contact_data || null
+function values(value) { return Array.isArray(value) ? value.filter(v => v != null).map(String) : [] }
+function contactName(row) { return contactFor(row)?.name || row.contact_name || 'Anonymous attendee' }
+function contactId(row) { return row.contact_id ?? contactFor(row)?.id }
+function fullName(row) { return staff.value || row.is_self === true }
+function linked(row) { return fullName(row) && contactId(row) != null && Boolean(contactFor(row)) }
+function shownName(row) {
+  const name = contactName(row)
+  if (fullName(row)) return name.toUpperCase()
+  return name === 'Anonymous attendee' ? '—' : name.split(/\s+/).filter(Boolean).map(part => part[0]).join('').toUpperCase()
 }
-
-function contactName(checkin) {
-  return checkinContact(checkin)?.name || checkin.contact_name || `Contact ${checkin.contact_id || 'anonymous'}`
+function zipList(row) {
+  const contact = contactFor(row)
+  return [contact?.zip_home, ...values(contact?.zip_other)].filter(Boolean)
 }
-
-function openContact(checkin) {
-  if (checkin.contact_id) router.push({ name: 'contact-profile', params: { contactId: checkin.contact_id } })
+function contactDraft(row) { return drafts.value?.contacts[String(contactId(row))] }
+function eventDate(value) {
+  try { return formatEventDate(value) } catch { return 'Event date or timezone unavailable' }
 }
-
 function formatTime(value) {
-  if (!value) return 'Unknown time'
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Unknown time'
-  const options = isMultiDay.value
-    ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: event.value?.timeZone }
-    : { hour: 'numeric', minute: '2-digit', timeZone: event.value?.timeZone }
-  const formatted = new Intl.DateTimeFormat('en-US', options).format(date)
-  if (!isMultiDay.value) return formatted
-  return formatted.replace(/(\w+ \d+)(,)?/, (_, day) => `${day}${ordinal(Number(day.match(/\d+/)[0]))}`)
-}
-
-function ordinal(day) {
-  if (day % 100 >= 11 && day % 100 <= 13) return 'th'
-  return ({ 1: 'st', 2: 'nd', 3: 'rd' })[day % 10] || 'th'
-}
-
-onMounted(async () => {
-  await load()
-
+  if (!value || Number.isNaN(date.getTime())) return 'Unknown time'
   try {
-    const result = await useApi().getEventCheckins(route.params.eventId)
-    checkins.value = Array.isArray(result) ? result : (result?.data || [])
-  } catch (e) {
-    error.value = e.message
-  } finally {
-    loading.value = false
+    const timeZone = event.value?.timeZone || 'UTC'
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    const multiDay = event.value?.end && day.format(event.value.end) !== day.format(event.value.start)
+    return new Intl.DateTimeFormat('en-US', {
+      ...(multiDay ? { month: 'short', day: 'numeric' } : {}),
+      hour: 'numeric', minute: '2-digit', timeZone, timeZoneName: 'short'
+    }).format(date)
+  } catch { return 'Unknown time' }
+}
+function toggleSelection(row, checked) {
+  const next = new Set(selection.value)
+  if (checked) next.add(String(row.id)); else next.delete(String(row.id))
+  selection.value = next
+}
+function toggleAll(checked) { selection.value = new Set(checked ? checkins.value.map(row => String(row.id)) : []) }
+function updateScrollState() {
+  const element = tableScroll.value
+  if (!element) return
+  scrollState.value = {
+    left: element.scrollLeft > 0,
+    right: element.scrollLeft + element.clientWidth < element.scrollWidth - 1
   }
+}
+function toggleRow(row, event) {
+  if (!staff.value || editing.value || event.target.closest('a, button, input, select, textarea')) return
+  toggleSelection(row, !selection.value.has(String(row.id)))
+}
+function clearEditor() { editing.value = false; drafts.value = null; operations.dirty.value = false }
+function resetSensitive() {
+  generation++
+  checkins.value = []
+  selection.value = new Set()
+  clearEditor()
+  error.value = ''
+  dialog.value?.close()
+}
+async function refresh() {
+  const current = ++generation
+  const eventId = String(route.params.eventId)
+  loading.value = true
+  error.value = ''
+  try {
+    await load()
+    if (current !== generation || !auth.ready.value) return
+    const result = await useApi().getEventCheckins(eventId)
+    if (current !== generation) return
+    const rows = Array.isArray(result) ? result : result?.data
+    if (!Array.isArray(rows)) throw new Error('Check-in response was invalid.')
+    checkins.value = rows.map(row => {
+      const contact = contactFor(row)
+      const fields = staff.value ? ['id', 'revision', 'name', 'emails', 'phones', 'zip_home', 'zip_other'] : ['id', 'name', 'zip_home']
+      return {
+        id: row.id, contact_id: row.contact_id, revision: row.revision,
+        submitted_on: rowTimestamp(row), contact_name: row.contact_name,
+        is_self: row.is_self === true,
+        contact: contact ? Object.fromEntries(fields.filter(field => contact[field] !== undefined).map(field => [field, contact[field]])) : null
+      }
+    })
+    selection.value = new Set([...selection.value].filter(id => rows.some(row => String(row.id) === id)))
+  } catch (e) {
+    if (current === generation) error.value = e.message
+  } finally {
+    if (current === generation) loading.value = false
+  }
+}
+watchEffect(() => {
+  const eventId = route.params.eventId
+  const authReady = auth.ready.value
+  const userId = auth.user.value?.uid
+  if (!eventId || !authReady) return
+  resetSensitive()
+  loading.value = true
+  void refresh()
 })
-
+watch(dirty, value => { operations.dirty.value = Boolean(value) }, { flush: 'sync' })
+watch(checkins, () => nextTick(updateScrollState), { flush: 'post' })
+function beginEdit() {
+  if (!mutationsAllowed.value) return
+  drafts.value = createDrafts(checkins.value, event.value)
+  editing.value = true
+  error.value = ''
+}
+function discard() { clearEditor(); error.value = '' }
+async function save() {
+  if (!mutationsAllowed.value) return
+  const current = generation
+  error.value = ''
+  try {
+    const mutations = buildMutations(drafts.value, checkins.value, event.value)
+    if (!mutations.length) { clearEditor(); return }
+    await operations.execute({ actionType: 'update', eventId: String(event.value.id), mutations })
+    if (current !== generation) return
+    clearEditor()
+    await refresh()
+  } catch (e) { if (current === generation) error.value = e.message }
+}
+const removeMessage = computed(() => {
+  const rows = selectedRows.value
+  const names = rows.map(contactName)
+  const joined = names.length === 1 ? names[0] : names.length === 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')}, and ${names.at(-1)}`
+  const target = rows.length <= 3 ? joined : `${rows.length} selected contacts`
+  return `Are you sure you want to remove ${target} from list of attendees? Only do this for accurate record-keeping if they weren't present at all for ${event.value?.title}`
+})
+async function confirmRemove(e) {
+  if (!mutationsAllowed.value || !selectedRows.value.length) return
+  removeTrigger = e.currentTarget
+  await nextTick()
+  dialog.value.showModal()
+  dialog.value.querySelector('button').focus()
+}
+function closeDialog() { dialog.value?.close(); removeTrigger?.focus(); removeTrigger = null }
+async function remove() {
+  if (!mutationsAllowed.value || !selectedRows.value.length) return
+  const current = generation
+  const mutations = selectedRows.value.map(row => ({ resource: 'checkins', id: row.id, action: 'DELETE', revision: row.revision }))
+  closeDialog()
+  error.value = ''
+  try {
+    await operations.execute({ actionType: 'delete', eventId: String(event.value.id), mutations })
+    if (current !== generation) return
+    selection.value = new Set()
+    await refresh()
+  } catch (e) { if (current === generation) error.value = e.message }
+}
+function canNavigate() {
+  if (operations.busy.value || operations.pending.value) return false
+  return !dirty.value || window.confirm('Discard unsaved attendee changes?')
+}
+onBeforeRouteLeave(canNavigate)
+onBeforeRouteUpdate(canNavigate)
+function beforeUnload(e) { if (dirty.value || operations.busy.value || operations.pending.value) { e.preventDefault(); e.returnValue = '' } }
+onMounted(() => window.addEventListener('beforeunload', beforeUnload))
+onBeforeUnmount(() => {
+  generation++
+  operations.dirty.value = false
+  window.removeEventListener('beforeunload', beforeUnload)
+})
+// Inverses and recovered requests always require authoritative attendance reads.
+watch(operations.lastReceipt, receipt => {
+  if (!receipt) return
+  if (String(receipt.event_id) === String(route.params.eventId)) {
+    clearEditor()
+    selection.value = new Set()
+  }
+  if (auth.ready.value && auth.claimsReady.value) void refresh()
+})
 </script>
 
 <template>
@@ -69,34 +213,156 @@ onMounted(async () => {
     <div v-if="!event && !loading" class="alert alert-warning">That event could not be found. <RouterLink to="/">Pick an event</RouterLink></div>
     <template v-else-if="event">
       <h1 class="h3">{{ event.title }}</h1>
-      <p class="text-muted">{{ formatEventDate(event) }}</p>
+      <p class="text-muted">{{ eventDate(event) }}</p>
       <p v-if="event.location">{{ event.location }}</p>
-      <ExpandablePreview v-if="descriptionHtml" class="event-description mb-4">
-        <div v-html="descriptionHtml"></div>
-      </ExpandablePreview>
-      <RouterLink class="btn btn-primary mb-4" :to="{ name: 'checkin', params: { eventId: event.id } }">Check in for event</RouterLink>
-      <h2 class="h5">Check-ins <span class="badge text-bg-secondary">{{ checkins.length }}</span></h2>
-      <div v-if="loading" class="text-muted">Loading check-ins...</div>
-      <div v-else-if="error" class="alert alert-warning">{{ error }}</div>
-      <div v-else-if="!checkins.length" class="text-muted">No check-ins yet.</div>
-      <div v-else class="table-responsive">
-        <table class="table table-hover align-middle w-100">
-          <thead><tr><th scope="col">Name</th><th scope="col">Zip</th><th scope="col">Time</th></tr></thead>
-          <tbody class="table-group-divider">
-            <tr v-for="checkin in checkins" :key="checkin.id" class="checkin-row" role="link" tabindex="0" @click="openContact(checkin)" @keydown.enter="openContact(checkin)">
-                          <td><span class="text-decoration-underline">{{ contactName(checkin) }}</span></td>
-              <td>{{ checkinContact(checkin)?.zip_home || '' }}</td>
-              <td>{{ formatTime(checkin.submitted_on || checkin.created_at || checkin.checked_in_at) }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <ExpandablePreview v-if="descriptionHtml" class="event-description mb-4"><div v-html="descriptionHtml"></div></ExpandablePreview>
+      <div class="btn-group w-100" role="group">
+        <RouterLink class="btn btn-primary mb-4" :to="{ name: 'checkin', params: { eventId: event.id } }">Check in for event</RouterLink>
       </div>
+      <section aria-labelledby="attendees-heading" :aria-busy="loading || operations.busy.value">
+        <h2 id="attendees-heading" class="h5">Check-ins <span class="badge text-bg-secondary">{{ checkins.length }}</span></h2>
+        <div v-if="loading" class="text-muted" role="status">Loading check-ins...</div>
+        <div v-if="error" class="alert alert-warning" role="alert">{{ error }}</div>
+        <div v-if="!loading && !checkins.length" class="text-muted">No check-ins yet.</div>
+        <form v-if="checkins.length && !loading" @submit.prevent="save">
+          <p v-if="editing" id="time-guidance" class="small text-muted">Times are in {{ event.timeZone || 'an unavailable event timezone' }}. Include the date. Ambiguous or nonexistent daylight-saving times must be corrected. {{ bounds ? '' : 'Time editing is unavailable for this event.' }}</p>
+          <div ref="tableScroll" class="table-responsive attendance-scroll" :class="{ 'has-right-shadow': scrollState.right }" @scroll="updateScrollState">
+            <table class="table table-hover align-middle attendance-table" :class="{ 'has-selection': staff && !editing, 'has-left-shadow': scrollState.left }">
+              <thead><tr>
+                <th v-if="staff && !editing" class="attendance-select" scope="col"><input type="checkbox" class="form-check-input" aria-label="Select all attendees" :checked="allSelected" :indeterminate="selectedRows.length > 0 && !allSelected" :disabled="operations.busy.value || Boolean(operations.pending.value)" @change="toggleAll($event.target.checked)"></th>
+                <th class="attendance-name" scope="col">Name</th><th v-if="staff" scope="col">Email</th><th v-if="staff" scope="col">Phone</th><th scope="col">Zip</th><th scope="col">Time</th>
+              </tr></thead>
+              <tbody class="table-group-divider">
+                <tr v-for="row in checkins" :key="row.id" @click="toggleRow(row, $event)">
+                  <td v-if="staff && !editing" class="attendance-select"><input type="checkbox" class="form-check-input" :aria-label="`Select ${contactName(row)}`" :checked="selection.has(String(row.id))" :disabled="operations.busy.value || Boolean(operations.pending.value)" @change="toggleSelection(row, $event.target.checked)"></td>
+                  <td class="attendance-name">
+                    <template v-if="editing"><input v-if="contactDraft(row)" v-model="contactDraft(row).name" class="form-control" :aria-label="`Name for ${contactName(row)}`" :disabled="operations.busy.value || Boolean(operations.pending.value)"><input v-else class="form-control" :value="contactName(row)" aria-label="Name unavailable" disabled></template>
+                    <RouterLink v-else-if="linked(row)" :to="{ name: 'contact-profile', params: { contactId: contactId(row) } }">{{ shownName(row) }}</RouterLink>
+                    <span v-else>{{ shownName(row) }}</span>
+                  </td>
+                  <td v-if="staff"><input v-if="editing && contactDraft(row)" v-model="contactDraft(row).emails" class="form-control" :aria-label="`Emails for ${contactName(row)}`" :disabled="operations.busy.value || Boolean(operations.pending.value)"><input v-else-if="editing" class="form-control" aria-label="Emails unavailable" disabled><span v-else>{{ values(contactFor(row)?.emails).join(', ') }}</span></td>
+                  <td v-if="staff"><input v-if="editing && contactDraft(row)" v-model="contactDraft(row).phones" class="form-control" :aria-label="`Phones for ${contactName(row)}`" :disabled="operations.busy.value || Boolean(operations.pending.value)"><input v-else-if="editing" class="form-control" aria-label="Phones unavailable" disabled><span v-else>{{ values(contactFor(row)?.phones).map(p => displayPhone(phoneDigits(p))).join(', ') }}</span></td>
+                  <td>
+                    <input v-if="editing && contactDraft(row)" v-model="contactDraft(row).zips" class="form-control" :aria-label="`ZIPs for ${contactName(row)}`" :disabled="operations.busy.value || Boolean(operations.pending.value)">
+                    <input v-else-if="editing" class="form-control" aria-label="ZIPs unavailable" disabled>
+                    <template v-else-if="staff"><template v-for="(zip, index) in zipList(row)" :key="index"><span v-if="index">, </span><strong v-if="index === 0 && contactFor(row)?.zip_home && zipList(row).length > 1">{{ zip }}</strong><span v-else>{{ zip }}</span></template></template>
+                    <span v-else>{{ contactFor(row)?.zip_home || '' }}</span>
+                  </td>
+                  <td><input v-if="editing" v-model="drafts.times[String(row.id)]" type="text" placeholder="YYYY-MM-DDTHH:mm:ss" class="form-control" :aria-label="`Time for ${contactName(row)}`" aria-describedby="time-guidance" :disabled="!bounds || operations.busy.value || Boolean(operations.pending.value)"><span v-else>{{ formatTime(rowTimestamp(row)) }}</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="staff" class="attendance-toolbar d-flex flex-wrap gap-2 align-items-center" role="toolbar" aria-label="Attendee actions">
+            <template v-if="editing"><button class="btn btn-primary" type="submit" :disabled="!mutationsAllowed">Save changes</button><button class="btn btn-outline-secondary" type="button" :disabled="operations.busy.value || Boolean(operations.pending.value)" @click="discard">Discard changes</button></template>
+            <template v-else><button class="btn btn-primary" type="button" :disabled="!mutationsAllowed" @click="beginEdit">Edit contacts</button><button v-if="selectedRows.length" class="btn btn-outline-danger" type="button" :disabled="!mutationsAllowed" @click="confirmRemove">Remove selected</button><button v-if="selectedRows.length" class="btn btn-outline-secondary" type="button" :disabled="operations.busy.value || Boolean(operations.pending.value)" @click="toggleAll(false)">Clear selection</button><span class="small">{{ selectedRows.length }} selected</span></template>
+            <span v-if="!operations.enabled" class="small text-muted">Save, Remove, and Undo are unavailable until backend support is verified.</span>
+          </div>
+        </form>
+      </section>
+      <dialog ref="dialog" class="attendance-dialog" aria-labelledby="remove-title" aria-describedby="remove-description" @cancel.prevent="closeDialog" @close="closeDialog">
+        <h2 id="remove-title" class="h5">Remove selected attendees</h2><p id="remove-description">{{ removeMessage }}</p>
+        <div class="d-flex flex-wrap gap-2"><button type="button" class="btn btn-secondary" @click="closeDialog">Cancel</button><button type="button" class="btn btn-danger" :disabled="!mutationsAllowed" @click="remove">Remove attendees</button></div>
+      </dialog>
     </template>
   </main>
 </template>
 
 <style scoped>
-.checkin-row {
-  cursor: pointer;
+.attendance-scroll {
+  position: relative;
+  width: 100vw;
+  max-width: none;
+  margin-left: calc(50% - 50vw);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-color: var(--bs-primary) transparent;
+  scrollbar-track-color: transparent;
 }
+.attendance-scroll::-webkit-scrollbar {
+  height: .65rem;
+  border: 0;
+  background: transparent;
+}
+.attendance-scroll::-webkit-scrollbar-track {
+  border: 0;
+  background: transparent;
+}
+.attendance-scroll::-webkit-scrollbar-corner { background: transparent; }
+.attendance-scroll::-webkit-scrollbar-thumb {
+  border: 0;
+  background: var(--bs-primary);
+  border-radius: 999px;
+}
+.attendance-scroll.has-right-shadow::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: .75rem;
+  content: '';
+  pointer-events: none;
+  box-shadow: -0.5rem 0 1rem -0.35rem rgb(0 0 0 / 25%);
+}
+.attendance-table {
+  width: max-content;
+  min-width: 100%;
+  margin-bottom: 0;
+  padding-right: 2rem;
+  white-space: nowrap;
+}
+.attendance-table th,
+.attendance-table td { white-space: nowrap; }
+.attendance-table th { font-weight: 700; }
+.attendance-table th:last-child,
+.attendance-table td:last-child { padding-right: 2rem; }
+.attendance-table a { color: #003b6f; }
+.attendance-table a:hover,
+.attendance-table a:focus { color: #00284c; }
+.attendance-table .attendance-select,
+.attendance-table .attendance-name {
+  position: sticky;
+  z-index: 2;
+  background: #eef2f5;
+}
+.attendance-table thead .attendance-select,
+.attendance-table thead .attendance-name { z-index: 4; background: #e5ebf0; }
+/*.attendance-table tbody tr:hover > .attendance-select,
+.attendance-table tbody tr:hover > .attendance-name { background-color: var(--bs-table-hover-bg); }*/
+.attendance-table .attendance-select {
+  left: 0;
+  width: 2.75rem;
+  min-width: 2.75rem;
+  padding-right: .75rem;
+  padding-left: .75rem;
+  text-align: center;
+}
+.attendance-table .attendance-select input[type='checkbox'] {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin: 0;
+  transform: scale(1.1);
+}
+.attendance-table .attendance-name {
+  left: 0;
+  font-weight: 700;
+}
+.attendance-table.has-selection .attendance-name { left: 2.75rem; }
+.attendance-table.has-left-shadow .attendance-name { box-shadow: .5rem 0 1rem -0.7rem rgb(0 0 0 / 45%); }
+.attendance-table .attendance-name input.form-control { font-weight: inherit; }
+.attendance-table td:not(.attendance-select):not(.attendance-name) { font-size: .875em; }
+.attendance-table input.form-control { min-width: 12rem; }
+.attendance-toolbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  width: 100vw;
+  max-width: none;
+  margin-left: calc(50% - 50vw);
+  background: var(--bs-body-bg);
+  border-top: 1px solid var(--bs-border-color);
+  padding: .75rem max(.25rem, calc((100vw - 100%)/2 + .25rem)) calc(.75rem + env(safe-area-inset-bottom));
+}
+.attendance-dialog { width: min(32rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); }
+.attendance-dialog::backdrop { background: rgb(0 0 0 / 50%); }
 </style>

@@ -16,11 +16,13 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 7'] } }
   ],
   webServer: {
-    command: 'npm start -- --port 4180 --strictPort',
+    command: 'npm start -- --mode e2e --port 4180 --strictPort',
     url: 'http://localhost:4180',
     reuseExistingServer: false,
     env: {
-      VITE_RECAPTCHA_SITE_KEY: ''
+      VITE_RECAPTCHA_SITE_KEY: '',
+      CHECKIN_E2E: '1',
+      VITE_API_BASE_URL: 'http://127.0.0.1:4199'
     }
   }
 })

@@ -424,7 +424,7 @@ test.describe('API failures', () => {
   test('the form can be resubmitted after a failure', async ({ page }) => {
     let first = true
     await mockApi(page)
-    await page.route('https://api.dallasurbanists.org/api/contacts?*', route => {
+    await page.route('http://127.0.0.1:4199/api/contacts?*', route => {
       if (first) {
         first = false
         return route.fulfill({

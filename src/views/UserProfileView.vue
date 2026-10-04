@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useAuth } from '../composables/firebase.js'
 import { useApi } from '../composables/useApi.js'
 
-const { user } = useAuth()
+const { user, isStaff, claimsReady } = useAuth()
 const profile = ref(null)
 const checkins = ref([])
 const error = ref('')
@@ -28,6 +28,11 @@ onMounted(async () => {
     <h1 class="h3">Your profile</h1>
     <section class="card p-3 mb-4">
       <div class="fw-semibold">{{ profile?.name || user?.displayName || 'User' }}</div>
+      <div class="mt-2">
+        <span class="badge" :class="claimsReady ? (isStaff ? 'text-bg-success' : 'text-bg-secondary') : 'text-bg-light text-dark'">
+          {{ claimsReady ? (isStaff ? 'Staff' : 'Not staff') : 'Checking staff status…' }}
+        </span>
+      </div>
       <div v-for="email in (profile?.emails || [profile?.email || user?.email])" :key="email" class="text-muted">{{ email }}</div>
       <div v-for="phone in (profile?.phones || [])" :key="phone">{{ phone }}</div>
       <div v-if="profile?.zip_home">Home ZIP: {{ profile.zip_home }}</div>
