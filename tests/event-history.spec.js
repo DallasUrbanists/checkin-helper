@@ -28,8 +28,8 @@ test('server history supports sequential source-wide Undo, across navigation and
   expect(state.groups.map(g => g.status)).toEqual(['undone', 'undone'])
   const calls = state.calls.filter(c => c.path.endsWith('/undo'))
   expect(calls.map(c => c.body)).toEqual([
-    { expected_latest_group_id: 'group-2', expected_latest_commit_order: '2', scope: { source: 'event-view' } },
-    { expected_latest_group_id: 'group-1', expected_latest_commit_order: '1', scope: { source: 'event-view' } }
+    { expected_latest_group_id: 'group-2', expected_latest_commit_order: '2', source: 'event-view' },
+    { expected_latest_group_id: 'group-1', expected_latest_commit_order: '1', source: 'event-view' }
   ])
 })
 

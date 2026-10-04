@@ -33,10 +33,11 @@ export async function mockEventOperations(page, { rows = attendees(), auth = { u
       const groups = state.groups.filter(g => g.owner === owner && ['committed', 'undone'].includes(g.status)).map(g => ({ ...g.receipt, status: g.status, undo_availability: state.blocked ? 'blocked' : 'eligible' })).reverse()
       const offset = Number(url.searchParams.get('cursor')?.replace('cursor-', '') || 0)
       const limit = Number(url.searchParams.get('limit') || 100)
-      return json(200, { data: groups.slice(offset, offset + limit), next_cursor: offset + limit < groups.length ? `cursor-${offset + limit}` : null })
+      return json(200, { items: groups.slice(offset, offset + limit), next_cursor: offset + limit < groups.length ? `cursor-${offset + limit}` : null })
     }
     if (url.pathname === '/api/operation-groups' && method === 'POST') {
-      if (!body.manifest?.length) return json(400, { message: 'Manifest required' })
+      if (!body.manifest?.length || body.manifest.some(item => !/^\d+$/.test(item.record_id))) return json(400, { message: 'Manifest required' })
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(body.client_action_id)) return json(400, { message: 'UUIDv7 required' })
       const group_id = `group-${state.next++}`
       state.groups.push({ group_id, owner, status: 'open', begin: body, staged: [] })
       return done(201, { group_id, status: 'open' })
@@ -66,7 +67,8 @@ export async function mockEventOperations(page, { rows = attendees(), auth = { u
       if (groupMatch[2] === 'undo') {
         if (state.expired) return json(410, { message: 'Undo expired' })
         if (state.blocked) return json(409, { message: 'Latest action is blocked' })
-        const latest = state.groups.filter(g => g.status === 'committed').at(-1)
+        const latest = state.groups.filter(g => g.owner === owner && g.status === 'committed').at(-1)
+        if (body?.expected_latest_group_id && (body.source !== 'event-view' || body.expected_latest_group_id !== latest?.group_id || body.expected_latest_commit_order !== latest?.receipt.commit_order)) return json(409, { message: 'Stale latest action', code: 'LATEST_ACTION_CHANGED' })
         if (latest !== group) return json(409, { message: 'Stale latest action' })
         state.rows = globalThis.structuredClone(group.before)
         group.status = 'undone'
@@ -77,12 +79,16 @@ export async function mockEventOperations(page, { rows = attendees(), auth = { u
       }
     }
     const mutation = url.pathname.match(/^\/api\/(contacts|checkins)\/(\d+)$/)
+    if (mutation && mutation[1] === 'contacts' && method === 'GET') {
+      const row = state.rows.find(row => String(row.contact_id) === mutation[2])
+      return row?.contact ? json(200, row.contact) : json(404, { message: 'Contact unavailable' })
+    }
     if (mutation && ['PUT', 'DELETE'].includes(method)) {
-      if (!request.headers()['x-operation-group'] || !request.headers()['if-match'] || !key) return json(428, { message: 'Grouped mutation preconditions required' })
+      if (!request.headers()['x-operation-group'] || !/^"[^"]+"$/.test(request.headers()['if-match'] || '') || !key) return json(428, { message: 'Grouped mutation preconditions required' })
       state.stageCount++
       if (state.failStage === state.stageCount) return json(400, { message: 'Invalid staged input' })
       const group = state.groups.find(g => g.group_id === request.headers()['x-operation-group'])
-      if (!group || !group.begin.manifest.some(m => m.resource === mutation[1] && String(m.id) === mutation[2] && m.action === method)) return json(409, { message: 'Target missing from manifest' })
+      if (!group || !group.begin.manifest.some(m => m.resource === mutation[1] && String(m.record_id) === mutation[2] && m.action === method)) return json(409, { message: 'Target missing from manifest' })
       group.staged.push({ resource: mutation[1], id: mutation[2], action: method, body })
       return done(202, { group_id: group.group_id, operation_id: `op-${group.staged.length}`, sequence: group.staged.length, staged: true })
     }

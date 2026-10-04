@@ -187,6 +187,9 @@ export function buildMutations(state, rows, event) {
     if (Temporal.Instant.compare(instant, bounds.min) < 0 || Temporal.Instant.compare(instant, bounds.max) > 0) {
       fail('Check-in time must be within the inclusive event time bounds (start minus 2 hours through end plus 1 hour, or start plus 4 hours without an end).', 'checkins', row.id, 'time')
     }
+    if (instant.epochNanoseconds % 1000n !== 0n) {
+      fail('Check-in time supports at most six fractional digits (microseconds).', 'checkins', row.id, 'time')
+    }
     mutations.push({ resource: 'checkins', id: row.id, action: 'PUT', revision: row.revision, body: { submitted_on: instant.toString() } })
   }
   return mutations

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
@@ -9,6 +9,7 @@ import { useAuth } from '../composables/firebase.js'
 import { displayPhone, phoneDigits } from '../composables/contactUtils.js'
 import { buildMutations, contactFor, createDrafts, draftDirty, rowTimestamp, timeBounds } from '../composables/eventDrafts.js'
 import { useEventOperations } from '../composables/eventOperations.js'
+import { resolveAttendanceContacts } from '../composables/attendanceContacts.js'
 import ExpandablePreview from '../components/ExpandablePreview.vue'
 
 const route = useRoute()
@@ -32,7 +33,7 @@ const dirty = computed(() => editing.value && drafts.value && draftDirty(drafts.
 const bounds = computed(() => timeBounds(event.value))
 const selectedRows = computed(() => checkins.value.filter(row => selection.value.has(String(row.id))))
 const allSelected = computed(() => checkins.value.length > 0 && selectedRows.value.length === checkins.value.length)
-const mutationsAllowed = computed(() => operations.enabled && staff.value && !operations.busy.value && !operations.pending.value)
+const mutationsAllowed = computed(() => operations.enabled.value && staff.value && !operations.busy.value && !operations.pending.value)
 const descriptionHtml = computed(() => {
   const description = event.value?.description
   return description ? DOMPurify.sanitize(marked.parse(String(description))) : ''
@@ -107,8 +108,10 @@ async function refresh() {
     if (current !== generation || !auth.ready.value) return
     const result = await useApi().getEventCheckins(eventId)
     if (current !== generation) return
-    const rows = Array.isArray(result) ? result : result?.data
+    let rows = Array.isArray(result) ? result : result?.data
     if (!Array.isArray(rows)) throw new Error('Check-in response was invalid.')
+    if (staff.value) rows = await resolveAttendanceContacts(rows, useApi().getContact)
+    if (current !== generation) return
     checkins.value = rows.map(row => {
       const contact = contactFor(row)
       const fields = staff.value ? ['id', 'revision', 'name', 'emails', 'phones', 'zip_home', 'zip_other'] : ['id', 'name', 'zip_home']
@@ -126,15 +129,12 @@ async function refresh() {
     if (current === generation) loading.value = false
   }
 }
-watchEffect(() => {
-  const eventId = route.params.eventId
-  const authReady = auth.ready.value
-  const userId = auth.user.value?.uid
-  if (!eventId || !authReady) return
-  resetSensitive()
-  loading.value = true
-  void refresh()
-})
+watch(() => [route.params.eventId, auth.ready.value, auth.user.value?.uid, auth.claimsReady.value, staff.value],
+  ([eventId, authReady]) => {
+    resetSensitive()
+    loading.value = true
+    if (eventId && authReady) void refresh()
+  }, { immediate: true, flush: 'sync' })
 watch(dirty, value => { operations.dirty.value = Boolean(value) }, { flush: 'sync' })
 watch(checkins, () => nextTick(updateScrollState), { flush: 'post' })
 function beginEdit() {
@@ -257,7 +257,7 @@ watch(operations.lastReceipt, receipt => {
           <div v-if="staff" class="attendance-toolbar d-flex flex-wrap gap-2 align-items-center" role="toolbar" aria-label="Attendee actions">
             <template v-if="editing"><button class="btn btn-primary" type="submit" :disabled="!mutationsAllowed">Save changes</button><button class="btn btn-outline-secondary" type="button" :disabled="operations.busy.value || Boolean(operations.pending.value)" @click="discard">Discard changes</button></template>
             <template v-else><button class="btn btn-primary" type="button" :disabled="!mutationsAllowed" @click="beginEdit">Edit contacts</button><button v-if="selectedRows.length" class="btn btn-outline-danger" type="button" :disabled="!mutationsAllowed" @click="confirmRemove">Remove selected</button><button v-if="selectedRows.length" class="btn btn-outline-secondary" type="button" :disabled="operations.busy.value || Boolean(operations.pending.value)" @click="toggleAll(false)">Clear selection</button><span class="small">{{ selectedRows.length }} selected</span></template>
-            <span v-if="!operations.enabled" class="small text-muted">Save, Remove, and Undo are unavailable until backend support is verified.</span>
+            <span v-if="!operations.enabled.value" class="small text-muted">Save, Remove, and Undo require authenticated server history. <button type="button" class="btn btn-link btn-sm p-0" @click="operations.refreshHistory().catch(() => {})">Retry connection</button></span>
           </div>
         </form>
       </section>

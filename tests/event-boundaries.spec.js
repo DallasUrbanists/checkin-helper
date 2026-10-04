@@ -43,7 +43,7 @@ test('anonymous contact fields are disabled but timestamp and removal remain sup
   await page.getByLabel('Time for Anonymous attendee', { exact: true }).fill('2026-11-01T10:00')
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByRole('button', { name: 'Edit contacts' })).toBeVisible()
-  expect(state.groups[0].begin.manifest).toEqual([{ resource: 'checkins', id: '1', action: 'PUT' }])
+  expect(state.groups[0].begin.manifest).toEqual([{ resource: 'checkins', record_id: '1', action: 'PUT' }])
 })
 
 test('history is paginated beyond 100 entries and opaque order stays exact', async ({ page }) => {

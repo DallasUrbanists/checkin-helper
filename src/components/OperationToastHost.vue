@@ -12,7 +12,7 @@ let mounted = false
 
 function canUndo(toast) {
   const group = history.value.find(item => item.group_id === toast.groupId)
-  return enabled && !busy.value && !dirty.value && !pending.value && group?.status === 'committed' &&
+  return enabled.value && !busy.value && !dirty.value && !pending.value && group?.status === 'committed' &&
     group.undo_availability !== 'blocked' && (!group.undo_expires_at || Date.parse(group.undo_expires_at) > Date.now())
 }
 
@@ -23,14 +23,14 @@ function editable(event) {
 }
 
 function onKeydown(event) {
-  if (!enabled || event.defaultPrevented || event.repeat || event.shiftKey || event.altKey ||
+  if (!enabled.value || event.defaultPrevented || event.repeat || event.shiftKey || event.altKey ||
     !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z' || editable(event) || !latest.value) return
   event.preventDefault()
   if (!busy.value) void operations.undo(latest.value, { keyboard: true }).catch(() => {})
 }
 
 async function reloadHistory() {
-  if (enabled && !busy.value && !pending.value && document.visibilityState !== 'hidden') {
+  if (!busy.value && !pending.value && document.visibilityState !== 'hidden') {
     try { await operations.refreshHistory() } catch { /* The next focus event can retry history discovery. */ }
   }
 }

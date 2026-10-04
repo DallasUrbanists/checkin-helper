@@ -16,6 +16,7 @@
     "fix": "npm run lint -- --fix",
     "test": "npm run build && npm run lint",
     "test:e2e": "playwright test",
+    "test:integration": "playwright test --config playwright.integration.config.js",
     "test:unit": "node --test tests/*.unit.js",
     "routes": "node scripts/list-routes.js",
     "major": "npm version major && git push origin main --tags",

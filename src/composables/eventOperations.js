@@ -2,18 +2,19 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { useAuth } from './firebase.js'
 import { apiRequest } from './useApi.js'
 import { operationsEnabled } from './operationCapability.js'
+import { clientActionId, latestCommitted, MAX_PAYLOAD_BYTES, MAX_TARGETS, payloadBytes, recordId } from './operationContract.js'
 
 const SOURCE = 'event-view'
 const ROOT = '/api/operation-groups'
-const enabled = operationsEnabled === true
+const capabilityReady = ref(false)
+const enabled = computed(() => operationsEnabled === true && capabilityReady.value)
 const busy = ref(false)
 const dirty = ref(false)
 const history = shallowRef([])
 const toasts = ref([])
 const pending = shallowRef(null)
 const lastReceipt = shallowRef(null)
-// The server returns descending opaque commit_order; never sort numerically or skip blocked entries.
-const latest = computed(() => history.value.find(group => group.status === 'committed') || null)
+const latest = computed(() => latestCommitted(history.value))
 let auth
 let epoch = 0
 let historyVersion = 0
@@ -25,7 +26,7 @@ function failure(message, code, status = 0, uncertain = false) {
 }
 
 function allowed() {
-  return enabled && auth?.user.value && auth.ready.value && auth.claimsReady.value && auth.isStaff.value
+  return operationsEnabled === true && auth?.user.value && auth.ready.value && auth.claimsReady.value && auth.isStaff.value
 }
 
 function assertAccess(version) {
@@ -56,6 +57,8 @@ function errorMessage(error) {
   if (error.status === 409 || error.status === 412) return 'Records or history changed. Refresh and review before trying again.'
   if (error.status === 410) return 'This action has expired and can no longer be undone.'
   if (error.status === 401 || error.status === 403) return 'Staff access is required. Sign in again or check permissions.'
+  if (error.status === 413) return 'This action exceeds 100 targets or 1 MiB. Reduce the changes; no records were changed.'
+  if (error.code === 'capability') return 'Atomic operations are unavailable until authenticated server history loads.'
   if (error.status === 400) return 'The changes are invalid. Review the form and try again.'
   if (error.status === 404) return 'The record or operation is no longer available.'
   return 'The operation could not be completed. Try again after refreshing.'
@@ -70,6 +73,7 @@ function clear() {
   pending.value = null
   lastReceipt.value = null
   history.value = []
+  capabilityReady.value = false
   toasts.value = []
 }
 
@@ -90,7 +94,7 @@ async function request(path, options, version) {
   return response
 }
 
-// These provisional wire shapes are intentionally confined to this adapter.
+// Only authorized metadata is retained; never copy server snapshots into UI history.
 function entry(data) {
   const value = data?.receipt || data?.group || data
   if (!value || typeof value.group_id !== 'string') return null
@@ -109,22 +113,50 @@ async function refreshHistory() {
   do {
     const query = new globalThis.URLSearchParams({ source: SOURCE, limit: '100' })
     if (cursor) query.set('cursor', cursor)
-    const data = await request(`${ROOT}?${query}`, {}, version)
+    let data
+    try { data = await request(`${ROOT}?${query}`, {}, version) } catch (error) {
+      if (error.code === 'INVALID_CURSOR' && cursor && !cursors.has('restarted')) {
+        entries.length = 0
+        cursors.clear()
+        cursors.add('restarted')
+        cursor = null
+        continue
+      }
+      if (refresh === historyVersion && version === epoch) {
+        history.value = []
+        capabilityReady.value = false
+      }
+      throw error
+    }
     if (refresh !== historyVersion) return history.value
-    const groups = Array.isArray(data) ? data : data?.data || data?.groups || data?.items
-    if (!Array.isArray(groups)) throw failure('Invalid history response.', 'protocol', 502)
+    const groups = data?.items
+    if (!Array.isArray(groups) || !(data.next_cursor === null || typeof data.next_cursor === 'string')) {
+      capabilityReady.value = false
+      history.value = []
+      throw failure('Invalid history response.', 'protocol', 502)
+    }
     for (const value of groups) {
       const group = entry(value)
-      if (!group || group.source !== SOURCE || !['committed', 'undone'].includes(group.status) || typeof group.commit_order !== 'string') {
+      if (!group || group.source !== SOURCE || !['committed', 'undone'].includes(group.status) ||
+        typeof group.commit_order !== 'string' || !/^\d+$/.test(group.commit_order)) {
+        capabilityReady.value = false
+        history.value = []
         throw failure('Invalid history entry.', 'protocol', 502)
       }
       if (!entries.some(item => item.group_id === group.group_id)) entries.push(group)
     }
     cursor = data?.next_cursor || null
-    if (cursor && cursors.has(cursor)) throw failure('Invalid history cursor.', 'protocol', 502)
+    if (cursor && cursors.has(cursor)) {
+      history.value = []
+      capabilityReady.value = false
+      throw failure('Invalid history cursor.', 'protocol', 502)
+    }
     if (cursor) cursors.add(cursor)
   } while (cursor)
-  if (refresh === historyVersion && version === epoch) history.value = entries
+  if (refresh === historyVersion && version === epoch) {
+    history.value = entries
+    capabilityReady.value = true
+  }
   return entries
 }
 
@@ -132,7 +164,8 @@ async function refreshSafely(version) {
   try { await refreshHistory() } catch {
     if (version === epoch) {
       history.value = []
-      notify('History could not be refreshed. Undo is unavailable until it reloads.')
+      capabilityReady.value = false
+      notify('History could not be refreshed. Atomic operations are unavailable until it reloads.')
     }
   }
 }
@@ -154,7 +187,9 @@ function beginAction(input) {
       throw failure('Invalid mutation target.', 'invalid', 400)
     }
     if (typeof item.revision !== 'string' || !item.revision.trim()) throw failure('Revision is required.', 'revision_required', 428)
-    const target = `${item.resource}:${item.id}`
+    let id
+    try { id = recordId(item.id) } catch (error) { throw failure(error.message, 'invalid', 400) }
+    const target = `${item.resource}:${id}`
     if (targets.has(target)) throw failure('Duplicate mutation target.', 'duplicate_target', 400)
     targets.add(target)
     let body
@@ -166,15 +201,21 @@ function beginAction(input) {
       if (Object.keys(item.body).some(field => !fields.includes(field))) throw failure('Unsupported update field.', 'invalid', 400)
       body = JSON.parse(JSON.stringify(item.body))
     }
-    return immutable({ resource: item.resource, id: String(item.id), action: item.action, revision: item.revision, body })
+    return immutable({ resource: item.resource, id, action: item.action, revision: item.revision, body })
   })
-  const clientActionId = key()
+  let eventId
+  try { eventId = recordId(input.eventId) } catch (error) { throw failure(error.message, 'invalid', 400) }
+  const actionId = clientActionId()
+  const begin = { source: SOURCE, client_action_id: actionId, action_type: input.actionType,
+    event_id: eventId, manifest: mutations.map(({ resource, id, action }) => ({ resource, record_id: id, action })) }
+  if (mutations.length > MAX_TARGETS || payloadBytes(begin, mutations) > MAX_PAYLOAD_BYTES) {
+    throw failure('This action exceeds 100 targets or 1 MiB. Reduce the changes; no records were changed.', 'GROUP_LIMIT_EXCEEDED', 413)
+  }
   return {
-    kind: 'execute', phase: 'begin', groupId: null, clientActionId,
-    begin: transport('POST', { source: SOURCE, client_action_id: clientActionId, action_type: input.actionType,
-      event_id: input.eventId, manifest: mutations.map(({ resource, id, action }) => ({ resource, id, action })) }),
+    kind: 'execute', phase: 'begin', groupId: null, clientActionId: actionId,
+    begin: transport('POST', begin),
     stages: mutations.map(item => ({ path: `/api/${item.resource}/${encodeURIComponent(item.id)}`,
-      options: immutable({ ...transport(item.action, item.body), headers: { 'Idempotency-Key': key(), 'If-Match': item.revision } }) })),
+      options: immutable({ ...transport(item.action, item.body), headers: { 'Idempotency-Key': key(), 'If-Match': `"${item.revision.replace(/^"|"$/g, '')}"` } }) })),
     commit: transport('POST'), cancel: transport('DELETE'), nextStage: 0, originalError: null
   }
 }
@@ -235,6 +276,13 @@ async function handleFailure(operation, error, version) {
   if (error.uncertain || !error.status || error.status >= 500) {
     error.uncertain = true
     publishPending(operation)
+  } else if (operation.kind === 'execute' && ['GROUP_EXPIRED', 'RETRY_HORIZON_EXPIRED', 'GROUP_NOT_FOUND'].includes(error.code)) {
+    active = null
+    pending.value = null
+  } else if (operation.kind === 'execute' && error.code === 'MANIFEST_INCOMPLETE') {
+    operation.nextStage = 0
+    error.uncertain = true
+    publishPending(operation)
   } else if (operation.kind === 'execute' && operation.groupId) {
     operation.originalError = error
     try { await cancel(operation, version) } catch (cancelError) {
@@ -270,6 +318,7 @@ async function submit(operation) {
 
 function checkSubmission(isUndo = false) {
   assertAccess(epoch)
+  if (!enabled.value) throw failure('Atomic operations are unavailable until authenticated server history loads.', 'capability', 503)
   if (busy.value) throw failure('An operation is already running.', 'busy', 409)
   if (active || pending.value) throw failure('An operation needs recovery.', 'pending', 409)
   if (isUndo && dirty.value) throw failure('Unsaved table changes.', 'dirty', 409)
@@ -288,7 +337,7 @@ async function undo(group = latest.value, { keyboard = false } = {}) {
     const current = history.value.find(item => item.group_id === id)
     if (!current || current.status !== 'committed') throw failure('Undo is unavailable.', 'stale', 409)
     if (keyboard && latest.value?.group_id !== id) throw failure('Latest history changed.', 'stale', 409)
-    const body = keyboard ? { expected_latest_group_id: id, expected_latest_commit_order: current.commit_order, scope: { source: SOURCE } } : {}
+    const body = keyboard ? { expected_latest_group_id: id, expected_latest_commit_order: current.commit_order, source: SOURCE } : {}
     return await submit({ kind: 'undo', phase: 'undo', groupId: id, clientActionId: current.client_action_id, undo: transport('POST', body) })
   } catch (error) {
     if (['dirty', 'pending', 'stale', 'busy', 'authorization'].includes(error.code)) notify(errorMessage(error))

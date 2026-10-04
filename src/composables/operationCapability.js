@@ -1,2 +1,2 @@
-// Phase Two must verify the server contract before enabling live grouped mutations.
-export const operationsEnabled = false
+// The delivered contract is supported; each account must still pass history discovery.
+export const operationsEnabled = true

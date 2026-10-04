@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Isolated operation integration harness</title></head>
+<body>
+  <p>Production eventOperations adapter against the isolated HTTP application.</p>
+  <script type="module">
+    import { useEventOperations } from '../../src/composables/eventOperations.js'
+    import { apiRequest } from '../../src/composables/useApi.js'
+    import { resolveAttendanceContacts } from '../../src/composables/attendanceContacts.js'
+    window.integration = { operations: useEventOperations(), apiRequest, resolveAttendanceContacts }
+  </script>
+</body>
+</html>
