@@ -2,14 +2,14 @@ import { test, expect } from '@playwright/test'
 import { attendees, mockEventOperations, setAuth } from './event-operations-mock.js'
 
 async function update(page, from, to) {
-  await page.getByRole('button', { name: 'Edit contacts', exact: true }).click()
+  await page.getByRole('button', { name: 'Edit attendees', exact: true }).click()
   await page.getByLabel(`Name for ${from}`, { exact: true }).fill(to)
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
 }
 async function open(page, options) {
   const state = await mockEventOperations(page, options)
   await page.goto('/#/events/1')
-  await expect(page.getByRole('button', { name: 'Edit contacts', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Edit attendees', exact: true })).toBeVisible()
   return state
 }
 
@@ -72,7 +72,7 @@ test('expiry and cross-tab stale latest conflicts preserve live data and refresh
   state.expired = true
   await page.keyboard.press('Control+z')
   await expect(page.getByText('This action has expired and can no longer be undone.')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Edit contacts', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Edit attendees', exact: true })).toBeEnabled()
   state.expired = false
   state.groups.push({ ...state.groups[0], group_id: 'remote-group', receipt: { ...state.groups[0].receipt, group_id: 'remote-group', commit_order: '2' } })
   await page.keyboard.press('Control+z')
@@ -85,14 +85,14 @@ test('another account has no Undo candidate, dirty drafts block application Undo
   const state = await open(page)
   await update(page, 'Alice Adams', 'Alice Updated')
   await expect(page.getByRole('link', { name: 'ALICE UPDATED' })).toBeVisible()
-  await page.getByRole('button', { name: 'Edit contacts', exact: true }).click()
+  await page.getByRole('button', { name: 'Edit attendees', exact: true }).click()
   await page.getByLabel('Name for Alice Updated', { exact: true }).fill('Draft Alice')
   await page.getByRole('heading', { name: 'Community Walk', exact: true }).click()
   await page.keyboard.press('Control+z')
   await expect(page.getByText('Save or discard table changes before Undo.')).toBeVisible()
   expect(state.calls.filter(c => c.path.endsWith('/undo'))).toHaveLength(0)
   await setAuth(page, { uid: 'staff-b', claims: { staff: true } })
-  await expect(page.getByRole('button', { name: 'Edit contacts', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Edit attendees', exact: true })).toBeVisible()
   await page.keyboard.press('Control+z')
   expect(state.calls.filter(c => c.path.endsWith('/undo'))).toHaveLength(0)
   await expect(page.getByRole('button', { name: 'Undo', exact: true })).toHaveCount(0)
@@ -126,7 +126,7 @@ test('desktop/mobile layout keeps toolbar outside scrolling table and notificati
   await open(page)
   await update(page, 'Alice Adams', 'Alice Updated')
   await expect(page.getByRole('link', { name: 'ALICE UPDATED' })).toBeVisible()
-  await page.getByRole('button', { name: 'Edit contacts', exact: true }).click()
+  await page.getByRole('button', { name: 'Edit attendees', exact: true }).click()
   const result = await page.evaluate(() => {
     const table = document.querySelector('.attendance-scroll')
     const toolbar = document.querySelector('.attendance-toolbar')

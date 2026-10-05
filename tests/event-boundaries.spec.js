@@ -37,12 +37,12 @@ test('anonymous contact fields are disabled but timestamp and removal remain sup
   const rows = [{ id: 1, contact_id: null, contact: null, revision: 'v1', submitted_on: '2026-11-01T15:30:00.123456Z' }]
   const state = await mockEventOperations(page, { rows })
   await go(page)
-  await page.getByRole('button', { name: 'Edit contacts' }).click()
+  await page.getByRole('button', { name: 'Edit attendees' }).click()
   await expect(page.getByLabel('Name unavailable', { exact: true })).toBeDisabled()
   await expect(page.getByLabel('Emails unavailable', { exact: true })).toBeDisabled()
   await page.getByLabel('Time for Anonymous attendee', { exact: true }).fill('2026-11-01T10:00')
   await page.getByRole('button', { name: 'Save changes' }).click()
-  await expect(page.getByRole('button', { name: 'Edit contacts' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Edit attendees' })).toBeVisible()
   expect(state.groups[0].begin.manifest).toEqual([{ resource: 'checkins', record_id: '1', action: 'PUT' }])
 })
 
@@ -64,7 +64,7 @@ test('history is paginated beyond 100 entries and opaque order stays exact', asy
 test('reload after lost commit discovers Undo without pending identifiers or snapshots', async ({ page }) => {
   const state = await mockEventOperations(page, { lostCommit: true })
   await go(page)
-  await page.getByRole('button', { name: 'Edit contacts' }).click()
+  await page.getByRole('button', { name: 'Edit attendees' }).click()
   await page.getByLabel('Name for Alice Adams', { exact: true }).fill('Alice Updated')
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByRole('button', { name: 'Retry recovery' })).toBeVisible()
@@ -81,8 +81,28 @@ test.describe('event timezone differs from device', () => {
   test('display and draft use Chicago rather than Tokyo', async ({ page }) => {
     await mockEventOperations(page)
     await go(page)
-    await expect(page.locator('tbody tr').first()).toContainText('9:30 AM CST')
-    await page.getByRole('button', { name: 'Edit contacts' }).click()
+    await expect(page.locator('tbody tr').first().locator('td').last()).toHaveText('9:30 AM')
+    await page.getByRole('button', { name: 'Edit attendees' }).click()
     await expect(page.getByLabel('Time for Alice Adams', { exact: true })).toHaveValue('2026-11-01T09:30:00.123456')
   })
+  for (const scenario of [
+    { name: 'same local day even when UTC day differs', timestamp: '2026-11-02T05:30:00Z', expected: '11:30 PM' },
+    { name: 'day before event', timestamp: '2026-11-01T04:30:00Z', expected: 'Oct 31, 11:30 PM' },
+    { name: 'day after event', timestamp: '2026-11-02T06:30:00Z', expected: 'Nov 2, 12:30 AM' },
+    { name: 'multiday event includes date even on start day', timestamp: '2026-11-01T15:30:00Z', end: '2026-11-02T18:00:00Z', expected: 'Nov 1, 9:30 AM' }
+  ]) {
+    test(`attendance time: ${scenario.name}`, async ({ page }) => {
+      const rows = attendees()
+      rows[0].submitted_on = scenario.timestamp
+      await mockEventOperations(page, { rows })
+      if (scenario.end) {
+        await page.route(`${API}/api/events?**`, route => route.fulfill({
+          contentType: 'application/json', headers: { 'access-control-allow-origin': '*' },
+          body: JSON.stringify({ data: [{ ...eventData, end_at: scenario.end }] })
+        }))
+      }
+      await go(page)
+      await expect(page.locator('tbody tr').first().locator('td').last()).toHaveText(scenario.expected)
+    })
+  }
 })

@@ -9,7 +9,7 @@ export function toStoragePhone(digits) {
 
 export function displayPhone(digits) {
   return digits.length === 10
-    ? `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+    ? `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
     : digits
 }
 

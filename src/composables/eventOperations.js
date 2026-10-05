@@ -396,6 +396,6 @@ export function useEventOperations() {
       if (allowed()) void refreshSafely(epoch)
     }, { immediate: true, flush: 'sync' })
   }
-  return { enabled, busy, dirty, history, latest, toasts, pending, lastReceipt, refreshHistory, execute, undo,
+  return { enabled, busy, dirty, history, latest, toasts, pending, lastReceipt, refreshHistory, execute, undo, notify,
     dismissToast: id => { toasts.value = toasts.value.filter(toast => toast.id !== id) }, clear, retryPending }
 }

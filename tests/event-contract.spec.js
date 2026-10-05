@@ -12,12 +12,12 @@ for (const response of [{ status: 404, body: { error: 'Not found' } }, { status:
       route.fulfill({ status: response.status, headers, contentType: 'application/json', body: JSON.stringify(response.body) }))
     await page.goto('/#/events/1')
     await expect(page.getByRole('link', { name: 'ALICE ADAMS' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Edit contacts', exact: true })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Edit attendees', exact: true })).toBeDisabled()
     await expect(page.getByRole('button', { name: 'Retry connection' })).toBeVisible()
     expect(state.calls.filter(call => call.method !== 'GET')).toHaveLength(0)
     available = true
     await page.getByRole('button', { name: 'Retry connection' }).click()
-    await expect(page.getByRole('button', { name: 'Edit contacts', exact: true })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Edit attendees', exact: true })).toBeEnabled()
   })
 }
 
@@ -26,7 +26,7 @@ test('contact edits resolve missing embedded revisions from canonical contact re
   await page.route(`${API}/api/checkins?**`, route => route.fulfill({ headers, contentType: 'application/json', body: JSON.stringify({ data: state.rows.map(row => ({ ...row, contact: { ...row.contact, revision: undefined, name: 'Stale embedded name' } })) }) }))
   await page.goto('/#/events/1')
   await expect(page.getByRole('link', { name: 'ALICE ADAMS' })).toBeVisible()
-  await page.getByRole('button', { name: 'Edit contacts', exact: true }).click()
+  await page.getByRole('button', { name: 'Edit attendees', exact: true }).click()
   await page.getByLabel('Name for Alice Adams', { exact: true }).fill('Alice Fixed')
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
   await expect(page.getByRole('link', { name: 'ALICE FIXED' })).toBeVisible()
@@ -44,10 +44,10 @@ test('stale account capability response cannot enable actions after role loss', 
     return route.fulfill({ headers, contentType: 'application/json', body: JSON.stringify({ items: [], next_cursor: null }) })
   })
   await page.goto('/#/events/1')
-  await expect(page.getByRole('button', { name: 'Edit contacts', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Edit attendees', exact: true })).toBeDisabled()
   await setAuth(page, { uid: 'nonstaff' })
   release()
-  await expect(page.getByRole('button', { name: 'Edit contacts', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Edit attendees', exact: true })).toHaveCount(0)
 })
 
 test('expired pagination cursor restarts discovery once', async ({ page }) => {
@@ -63,7 +63,7 @@ test('expired pagination cursor restarts discovery once', async ({ page }) => {
     return route.fallback()
   })
   await page.goto('/#/events/1')
-  await expect(page.getByRole('button', { name: 'Edit contacts', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Edit attendees', exact: true })).toBeEnabled()
   expect(state.calls.some(call => call.method !== 'GET')).toBe(false)
 })
 

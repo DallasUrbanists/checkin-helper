@@ -10,6 +10,8 @@ import { displayPhone, phoneDigits } from '../composables/contactUtils.js'
 import { buildMutations, contactFor, createDrafts, draftDirty, rowTimestamp, timeBounds } from '../composables/eventDrafts.js'
 import { useEventOperations } from '../composables/eventOperations.js'
 import { resolveAttendanceContacts } from '../composables/attendanceContacts.js'
+import { attendanceFilename, serializeAttendance } from '../composables/attendanceExport.js'
+import 'bootstrap/js/dist/dropdown'
 import ExpandablePreview from '../components/ExpandablePreview.vue'
 
 const route = useRoute()
@@ -32,6 +34,7 @@ const staff = auth.isStaff
 const dirty = computed(() => editing.value && drafts.value && draftDirty(drafts.value))
 const bounds = computed(() => timeBounds(event.value))
 const selectedRows = computed(() => checkins.value.filter(row => selection.value.has(String(row.id))))
+const exportRows = computed(() => selectedRows.value.length ? selectedRows.value : checkins.value)
 const allSelected = computed(() => checkins.value.length > 0 && selectedRows.value.length === checkins.value.length)
 const mutationsAllowed = computed(() => operations.enabled.value && staff.value && !operations.busy.value && !operations.pending.value)
 const descriptionHtml = computed(() => {
@@ -65,9 +68,10 @@ function formatTime(value) {
     const timeZone = event.value?.timeZone || 'UTC'
     const day = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
     const multiDay = event.value?.end && day.format(event.value.end) !== day.format(event.value.start)
+    const differentDay = day.format(date) !== day.format(event.value.start)
     return new Intl.DateTimeFormat('en-US', {
-      ...(multiDay ? { month: 'short', day: 'numeric' } : {}),
-      hour: 'numeric', minute: '2-digit', timeZone, timeZoneName: 'short'
+      ...(multiDay || differentDay ? { month: 'short', day: 'numeric' } : {}),
+      hour: 'numeric', minute: '2-digit', timeZone
     }).format(date)
   } catch { return 'Unknown time' }
 }
@@ -77,6 +81,35 @@ function toggleSelection(row, checked) {
   selection.value = next
 }
 function toggleAll(checked) { selection.value = new Set(checked ? checkins.value.map(row => String(row.id)) : []) }
+function downloadAttendance(format) {
+  if (!staff.value || loading.value || !exportRows.value.length) return
+  let url
+  try {
+    const content = serializeAttendance(exportRows.value, format)
+    const filename = attendanceFilename(event.value, format)
+    url = URL.createObjectURL(new window.Blob([content], { type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.append(link)
+    link.click()
+    link.remove()
+  } catch {
+    operations.notify('Download failed. Please try again.')
+  } finally {
+    if (url) setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+}
+async function copyAttendance(format) {
+  if (!staff.value || loading.value || !exportRows.value.length) return
+  const current = generation
+  try {
+    await window.navigator.clipboard.writeText(serializeAttendance(exportRows.value, format))
+    if (current === generation) operations.notify('Copied to clipboard.', 'success')
+  } catch {
+    if (current === generation) operations.notify('Could not copy to clipboard. Check your browser clipboard permissions.')
+  }
+}
 function updateScrollState() {
   const element = tableScroll.value
   if (!element) return
@@ -217,8 +250,9 @@ watch(operations.lastReceipt, receipt => {
       <p class="text-muted">{{ eventDate(event) }}</p>
       <p v-if="event.location">{{ event.location }}</p>
       <ExpandablePreview v-if="descriptionHtml" class="event-description mb-4"><div v-html="descriptionHtml"></div></ExpandablePreview>
-      <div class="btn-group w-100" role="group">
-        <RouterLink class="btn btn-primary mb-4" :to="{ name: 'checkin', params: { eventId: event.id } }">Check in for event</RouterLink>
+      <div class="btn-group w-100 mb-4" role="group" aria-label="Event actions">
+        <RouterLink class="btn btn-primary" :to="{ name: 'checkin', params: { eventId: event.id } }">{{ staff ? 'Add attendee' : 'Check in for event' }}</RouterLink>
+        <button v-if="staff && !editing && checkins.length && !loading" class="btn btn-outline-primary" type="button" :disabled="!mutationsAllowed" @click="beginEdit">Edit attendees</button>
       </div>
       <section aria-labelledby="attendees-heading" :aria-busy="loading || operations.busy.value">
         <h2 id="attendees-heading" class="h5">Check-ins <span class="badge text-bg-secondary">{{ checkins.length }}</span></h2>
@@ -255,9 +289,24 @@ watch(operations.lastReceipt, receipt => {
             </table>
           </div>
           <div v-if="staff" class="attendance-toolbar d-flex flex-wrap gap-2 align-items-center" role="toolbar" aria-label="Attendee actions">
-            <template v-if="editing"><button class="btn btn-primary" type="submit" :disabled="!mutationsAllowed">Save changes</button><button class="btn btn-outline-secondary" type="button" :disabled="operations.busy.value || Boolean(operations.pending.value)" @click="discard">Discard changes</button></template>
-            <template v-else><button class="btn btn-primary" type="button" :disabled="!mutationsAllowed" @click="beginEdit">Edit contacts</button><button v-if="selectedRows.length" class="btn btn-outline-danger" type="button" :disabled="!mutationsAllowed" @click="confirmRemove">Remove selected</button><button v-if="selectedRows.length" class="btn btn-outline-secondary" type="button" :disabled="operations.busy.value || Boolean(operations.pending.value)" @click="toggleAll(false)">Clear selection</button><span class="small">{{ selectedRows.length }} selected</span></template>
-            <span v-if="!operations.enabled.value" class="small text-muted">Save, Remove, and Undo require authenticated server history. <button type="button" class="btn btn-link btn-sm p-0" @click="operations.refreshHistory().catch(() => {})">Retry connection</button></span>
+            <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Attendance controls">
+              <div class="btn-group btn-group-sm" role="group">
+                <button id="attendance-export" type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Export</button>
+                <ul class="dropdown-menu" aria-labelledby="attendance-export">
+                  <li><button type="button" class="dropdown-item" @click="downloadAttendance('csv')">Download CSV</button></li>
+                  <li><button type="button" class="dropdown-item" @click="downloadAttendance('json')">Download JSON</button></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li><button type="button" class="dropdown-item" @click="copyAttendance('csv')">Copy CSV</button></li>
+                  <li><button type="button" class="dropdown-item" @click="copyAttendance('json')">Copy JSON</button></li>
+                  <li><button type="button" class="dropdown-item" @click="copyAttendance('email')">Copy for email merge</button></li>
+                </ul>
+              </div>
+              <template v-if="editing"><button class="btn btn-sm btn-primary" type="submit" :disabled="!mutationsAllowed">Save changes</button><button class="btn btn-sm btn-outline-secondary" type="button" :disabled="operations.busy.value || Boolean(operations.pending.value)" @click="discard">Discard changes</button></template>
+              <template v-else><button v-if="selectedRows.length" class="btn btn-sm btn-outline-danger" type="button" :disabled="!mutationsAllowed" @click="confirmRemove">Remove selected</button><button v-if="selectedRows.length" class="btn btn-sm btn-outline-secondary" type="button" :disabled="operations.busy.value || Boolean(operations.pending.value)" @click="toggleAll(false)">Clear selection</button></template>
+              <button v-if="!operations.enabled.value" type="button" class="btn btn-sm btn-outline-secondary" @click="operations.refreshHistory().catch(() => {})">Retry connection</button>
+            </div>
+            <span v-if="!editing" class="small">{{ selectedRows.length }} selected</span>
+            <span v-if="!operations.enabled.value" class="small text-muted">Save, Remove, and Undo require authenticated server history.</span>
           </div>
         </form>
       </section>
@@ -388,5 +437,21 @@ watch(operations.lastReceipt, receipt => {
   position: static;
   background: transparent;
   box-shadow: none;
+}
+@media (max-width: 575.98px) {
+  .attendance-table th,
+  .attendance-table td,
+  .attendance-table td:not(.attendance-select):not(.attendance-name),
+  .attendance-table input.form-control { font-size: .875rem; }
+  .attendance-scroll .attendance-table th,
+  .attendance-scroll .attendance-table td { padding: .25rem; }
+  .attendance-scroll:not(.staff-table) .attendance-table th:last-child,
+  .attendance-scroll:not(.staff-table) .attendance-table td:last-child { padding-right: .25rem; }
+  .attendance-scroll .attendance-table .attendance-select {
+    width: 1.75rem;
+    min-width: 1.75rem;
+    padding-right: 0;
+  }
+  .attendance-table.has-selection .attendance-name { left: 1.75rem; }
 }
 </style>

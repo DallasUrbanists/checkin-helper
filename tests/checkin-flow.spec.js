@@ -221,14 +221,14 @@ test.describe('multiple matching contacts', () => {
 
     const doe = option(page, 'Jane Doe')
     await expect(doe).toContainText('j******e@g****.com')
-    await expect(doe).toContainText('(21*) ***-**99')
+    await expect(doe).toContainText('21*-***-**99')
     await expect(doe).not.toContainText('jane.doe')
     await expect(doe).not.toContainText('555')
     await expect(doe).not.toContainText('75201')
 
     const smith = option(page, 'Jane Smith')
     await expect(smith).toContainText('j*******h@y****.com')
-    await expect(smith).toContainText('(97*) ***-**00')
+    await expect(smith).toContainText('97*-***-**00')
     await expect(smith).not.toContainText('75001')
     await expect(smith).not.toContainText('75002')
   })
@@ -238,7 +238,7 @@ test.describe('multiple matching contacts', () => {
 
     const doe = option(page, 'Jane Doe')
     await expect(doe).toContainText('jane.doe@gmail.com')
-    await expect(doe).toContainText('(214) 555-0199')
+    await expect(doe).toContainText('214-555-0199')
     await expect(doe).toContainText('75201')
 
     const smith = option(page, 'Jane Smith')
@@ -251,7 +251,7 @@ test.describe('multiple matching contacts', () => {
 
     const doe = option(page, 'Jane Doe')
     await expect(doe).toContainText('jane.doe@gmail.com')
-    await expect(doe).toContainText('(21*) ***-**99')
+    await expect(doe).toContainText('21*-***-**99')
     await expect(doe).not.toContainText('75201')
   })
 
@@ -334,7 +334,7 @@ test.describe('confirmation page', () => {
     await expect(main).toContainText(/\d{1,2}:\d{2}/)
     await expect(main).toContainText('Alex Rivera')
     await expect(main).toContainText('alex@example.com')
-    await expect(main).toContainText('(214) 555-0123')
+    await expect(main).toContainText('214-555-0123')
     await expect(main).toContainText('75204')
   })
 
