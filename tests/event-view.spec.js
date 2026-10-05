@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import AxeBuilder from '@axe-core/playwright'
 import { attendees, mockEventOperations, setAuth } from './event-operations-mock.js'
+import { ATTENDANCE_SORT_KEY } from '../src/composables/attendanceSort.js'
 
 const open = page => page.goto('/#/events/1')
 const edit = page => page.getByRole('button', { name: 'Edit attendees', exact: true }).click()
@@ -15,6 +16,207 @@ async function checkContrast(page) {
     nodes: violation.nodes.map(node => ({ target: node.target, details: node.failureSummary }))
   }))).toEqual([])
 }
+
+test('heading sort defaults to newest first and persists direction across refresh and events', async ({ page }) => {
+  const rows = attendees()
+  rows[0].submitted_on = '2026-11-01T15:10:00Z'
+  rows[1].submitted_on = '2026-11-01T15:40:00Z'
+  rows[2].submitted_on = '2026-11-01T15:20:00Z'
+  rows[3].submitted_on = 'invalid'
+  await mockEventOperations(page, { rows })
+  await open(page)
+  const names = page.locator('tbody .attendance-name')
+  await expect(names).toHaveText(['BOB BROWN', 'CAROL CLARK', 'ALICE ADAMS', 'DAVID DAVIS'])
+  await expect(page.getByRole('columnheader', { name: 'Time', exact: true })).toHaveAttribute('aria-sort', 'descending')
+  await expect(page.locator('thead svg')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Name', exact: true }).click()
+  await expect(names).toHaveText(['ALICE ADAMS', 'BOB BROWN', 'CAROL CLARK', 'DAVID DAVIS'])
+  await page.getByRole('button', { name: 'Name', exact: true }).click()
+  await expect(names).toHaveText(['DAVID DAVIS', 'CAROL CLARK', 'BOB BROWN', 'ALICE ADAMS'])
+  expect(await page.evaluate(key => JSON.parse(window.localStorage.getItem(key)), ATTENDANCE_SORT_KEY)).toEqual({ column: 'name', direction: 'desc' })
+  await page.reload()
+  await expect(names).toHaveText(['DAVID DAVIS', 'CAROL CLARK', 'BOB BROWN', 'ALICE ADAMS'])
+  await page.goto('/#/events/2')
+  await expect(names).toHaveText(['DAVID DAVIS', 'CAROL CLARK', 'BOB BROWN', 'ALICE ADAMS'])
+  await expect(page.getByRole('columnheader', { name: 'Name', exact: true })).toHaveAttribute('aria-sort', 'descending')
+  await page.getByRole('button', { name: 'Time', exact: true }).click()
+  await page.getByRole('button', { name: 'Time', exact: true }).click()
+  await expect(names).toHaveText(['ALICE ADAMS', 'CAROL CLARK', 'BOB BROWN', 'DAVID DAVIS'])
+})
+
+test('email values follow column direction and first-value sorting keeps missing values last', async ({ page }) => {
+  const rows = attendees()
+  rows[0].contact.emails = ['z@example.org', 'a@example.org']
+  rows[1].contact.emails = ['m@example.org']
+  rows[2].contact.emails = []
+  rows[3].contact.emails = ['b@example.org']
+  rows[0].contact.phones = ['+1-469-555-0199']
+  rows[1].contact.phones = ['+1-214-555-0199']
+  rows[2].contact.phones = []
+  rows[3].contact.phones = ['+1-972-555-0199']
+  rows[0].contact.zip_home = '75202'
+  rows[1].contact.zip_home = '75201'
+  rows[2].contact.zip_home = ''
+  rows[2].contact.zip_other = ['75203']
+  rows[3].contact.zip_home = ''
+  rows[3].contact.zip_other = []
+  await mockEventOperations(page, { rows })
+  await open(page)
+  const names = page.locator('tbody .attendance-name')
+  await page.getByRole('button', { name: 'Email', exact: true }).click()
+  await expect(names).toHaveText(['ALICE ADAMS', 'DAVID DAVIS', 'BOB BROWN', 'CAROL CLARK'])
+  await expect(page.locator('tbody tr').first().locator('td').nth(2)).toHaveText('a@example.org, z@example.org')
+  await page.getByRole('button', { name: 'Email', exact: true }).click()
+  await expect(names).toHaveText(['ALICE ADAMS', 'BOB BROWN', 'DAVID DAVIS', 'CAROL CLARK'])
+  await expect(page.locator('tbody tr').first().locator('td').nth(2)).toHaveText('z@example.org, a@example.org')
+  await page.getByRole('button', { name: 'Phone', exact: true }).click()
+  await expect(names).toHaveText(['BOB BROWN', 'ALICE ADAMS', 'DAVID DAVIS', 'CAROL CLARK'])
+  await page.getByRole('button', { name: 'Zip', exact: true }).click()
+  await expect(names).toHaveText(['BOB BROWN', 'ALICE ADAMS', 'CAROL CLARK', 'DAVID DAVIS'])
+})
+
+for (const staff of [true, false]) {
+  test(`${staff ? 'staff' : 'public'} heading cell edges toggle sort once and Time scrolls while right-aligned`, async ({ page }) => {
+    const rows = attendees()
+    rows[0].contact.emails = Array.from({ length: 8 }, (_, index) => `attendee-${index}@example.org`)
+    await mockEventOperations(page, { rows, auth: { uid: 'attendee-a', claims: { staff } } })
+    await open(page)
+    const label = staff ? 'Name' : 'Attendee Initials'
+    const heading = page.getByRole('columnheader', { name: label, exact: true })
+    const box = await heading.boundingBox()
+    await heading.click({ position: { x: box.width - 2, y: box.height - 2 } })
+    await expect(heading).toHaveAttribute('aria-sort', 'ascending')
+    await heading.getByRole('button', { name: label, exact: true }).click()
+    await expect(heading).toHaveAttribute('aria-sort', 'descending')
+    await heading.getByRole('button', { name: label, exact: true }).focus()
+    await page.keyboard.press('Enter')
+    await expect(heading).toHaveAttribute('aria-sort', 'ascending')
+    for (const expanded of [false, true]) {
+      if (expanded) await page.getByRole('button', { name: 'Expand view', exact: true }).click()
+      const scroll = page.locator('.attendance-scroll')
+      for (const fraction of [0, .5, 1]) {
+        await scroll.evaluate((element, fraction) => { element.scrollLeft = (element.scrollWidth - element.clientWidth) * fraction }, fraction)
+        await expect.poll(() => scroll.evaluate(element => {
+          const right = element.getBoundingClientRect().left + element.scrollWidth - element.scrollLeft
+          return [...element.querySelectorAll('.attendance-time')].every(cell => Math.abs(cell.getBoundingClientRect().right - right) < 1)
+        })).toBe(true)
+      }
+      const alignment = await scroll.evaluate(element => {
+        const cell = element.querySelector('tbody .attendance-time')
+        const text = cell.querySelector('span')
+        return {
+          padding: window.getComputedStyle(cell).paddingRight,
+          align: window.getComputedStyle(cell).textAlign,
+          position: window.getComputedStyle(cell).position,
+          headingRight: window.getComputedStyle(element.querySelector('thead .attendance-time')).right,
+          scrollsHorizontally: element.scrollWidth > element.clientWidth,
+          gap: cell.getBoundingClientRect().right - text.getBoundingClientRect().right,
+          right: element.getBoundingClientRect().right, viewport: window.innerWidth
+        }
+      })
+      expect(alignment.padding).toBe('8px')
+      expect(alignment.align).toBe('right')
+      expect(alignment.position).toBe('static')
+      expect(alignment.headingRight).toBe('auto')
+      if (staff) expect(alignment.scrollsHorizontally).toBe(true)
+      expect(Math.abs(alignment.gap - parseFloat(alignment.padding))).toBeLessThan(1)
+      expect(alignment.right).toBeCloseTo(alignment.viewport, 0)
+    }
+  })
+}
+
+test('public sorting remains redacted and falls back from a cached private column', async ({ page }) => {
+  await page.addInitScript(key => window.localStorage.setItem(key, '{"column":"emails","direction":"desc"}'), ATTENDANCE_SORT_KEY)
+  await mockEventOperations(page, { auth: { uid: 'public-a' } })
+  await open(page)
+  await expect(page.getByRole('columnheader', { name: 'Time', exact: true })).toHaveAttribute('aria-sort', 'descending')
+  await page.getByRole('button', { name: 'Attendee Initials', exact: true }).click()
+  await expect(page.locator('tbody .attendance-name')).toHaveText(['AA', 'BB', 'CC', 'DD'])
+  await expect(page.getByRole('button', { name: 'Email', exact: true })).toHaveCount(0)
+  await expect(page.locator('tbody')).not.toContainText('example.org')
+})
+
+for (const staff of [true, false]) {
+  test(`${staff ? 'staff' : 'public'} expanded view covers navigation, fills viewport and restores focus`, async ({ page }, testInfo) => {
+    const contacts = attendees()
+    const rows = Array.from({ length: 60 }, (_, index) => ({ ...contacts[index % contacts.length], id: index + 1 }))
+    await mockEventOperations(page, { rows, auth: { uid: 'attendee-a', claims: { staff } } })
+    await open(page)
+    await page.getByRole('button', { name: 'Expand view', exact: true }).click()
+    const panel = page.getByRole('dialog', { name: 'Expanded attendance', exact: true })
+    await expect(panel).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Shrink view', exact: true })).toBeFocused()
+    const layout = await panel.evaluate(element => {
+      const bounds = element.getBoundingClientRect()
+      return {
+        left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom,
+        width: window.innerWidth, height: window.innerHeight,
+        toolbarBottom: element.querySelector('.attendance-toolbar').getBoundingClientRect().bottom,
+        tableScrolls: element.querySelector('.attendance-scroll').scrollHeight > element.querySelector('.attendance-scroll').clientHeight,
+        coversNav: Boolean(document.elementFromPoint(20, 20)?.closest('.attendance-expanded')),
+        headerInert: document.querySelector('header').inert, overflow: document.body.style.overflow
+      }
+    })
+    expect(layout.left).toBe(0)
+    expect(layout.top).toBe(0)
+    expect(layout.right).toBe(layout.width)
+    expect(layout.bottom).toBe(layout.height)
+    expect(layout.toolbarBottom).toBe(layout.height)
+    expect(layout.tableScrolls).toBe(true)
+    expect(layout.coversNav).toBe(true)
+    expect(layout.headerInert).toBe(true)
+    expect(layout.overflow).toBe('hidden')
+    await checkContrast(page)
+    await page.screenshot({ path: testInfo.outputPath('expanded-view.png') })
+    await page.keyboard.press('Tab')
+    await expect(staff ? panel.getByLabel('Select all attendees') : panel.getByRole('button', { name: 'Attendee Initials', exact: true })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(panel).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Expand view', exact: true })).toBeFocused()
+    expect(await page.evaluate(() => document.querySelector('header').inert)).toBe(false)
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('')
+    await page.getByRole('button', { name: 'Expand view', exact: true }).click()
+    await page.getByRole('button', { name: 'Shrink view', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Expand view', exact: true })).toBeFocused()
+  })
+}
+
+test('expanded view preserves selection, supports removal confirmation and restores background on role loss', async ({ page }) => {
+  await mockEventOperations(page)
+  await page.addInitScript(() => {
+    Object.defineProperty(window.navigator, 'clipboard', { value: { writeText: async text => { window.attendanceClipboard = text } } })
+  })
+  await open(page)
+  await page.getByLabel('Select Alice Adams', { exact: true }).check()
+  await page.getByRole('button', { name: 'Expand view', exact: true }).click()
+  await page.getByRole('button', { name: 'Name', exact: true }).click()
+  await expect(page.getByLabel('Select Alice Adams', { exact: true })).toBeChecked()
+  await page.getByRole('button', { name: 'Export 1', exact: true }).click()
+  await page.getByRole('button', { name: 'Copy CSV', exact: true }).click()
+  const toast = page.locator('.operation-toast').filter({ hasText: 'Copied to clipboard.' })
+  await expect(toast).toBeVisible()
+  const abovePanel = await toast.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    return Boolean(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)?.closest('.operation-toast'))
+  })
+  expect(abovePanel).toBe(true)
+  await toast.getByRole('button', { name: 'Dismiss' }).click()
+  await page.getByRole('button', { name: 'Remove selected', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Remove selected attendees', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Shrink view', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Remove selected', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Remove selected attendees', exact: true }).getByRole('button', { name: 'Remove attendees', exact: true }).click()
+  await expect(page.locator('tbody tr')).toHaveCount(3)
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  await expect(page.locator('tbody tr')).toHaveCount(4)
+  await expect(page.getByRole('dialog', { name: 'Expanded attendance', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.querySelector('header').inert)).toBe(true)
+  await setAuth(page, {})
+  await expect(page.getByRole('dialog', { name: 'Expanded attendance', exact: true })).toHaveCount(0)
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe('')
+  await expect(page.locator('tbody')).not.toContainText('example.org')
+})
 
 test('clickable event text has sufficient contrast against rendered backgrounds and interaction states', async ({ page }) => {
   await mockEventOperations(page)
@@ -89,7 +291,7 @@ test('public remains redacted; only server-confirmed self links full name; null 
   rows[3].contact_id = null
   await mockEventOperations(page, { rows, auth: { uid: 'public-a' } })
   await open(page)
-  await expect(page.locator('thead th')).toHaveText(['Name', 'Zip', 'Time'])
+  await expect(page.locator('thead th')).toHaveText(['Attendee Initials', 'Zip', 'Time'])
   await expect(page.locator('tbody tr').first()).toContainText('AA')
   await expect(page.getByRole('link', { name: 'ALICE ADAMS' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'BOB BROWN' })).toBeVisible()
@@ -190,7 +392,7 @@ test('claim resolution fails closed and stale result cannot elevate another acco
   await mockEventOperations(page, { auth: { uid: 'staff-a', claims: { staff: true }, delay: 500 } })
   await open(page)
   await setAuth(page, { uid: 'public-b' })
-  await expect(page.locator('thead th')).toHaveText(['Name', 'Zip', 'Time'])
+  await expect(page.locator('thead th')).toHaveText(['Attendee Initials', 'Zip', 'Time'])
   await page.waitForTimeout(600)
   await expect(page.getByRole('button', { name: 'Edit attendees' })).toHaveCount(0)
   await expect(page.locator('tbody')).not.toContainText('example.org')

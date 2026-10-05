@@ -7,7 +7,7 @@ Fast, mobile-friendly event check-in tool for Dallas Urbanists. Register attende
 - **Event listing** — Fetches events from the Events API, caches them locally for 10 minutes, and categorizes them into **Current** (12-hour lookback to 24-hour lookahead) and **Future** events
 - **Firebase authentication** — Email/password and Google popup sign-in using `VITE_FIREBASE_*` configuration
 - **Authenticated profiles** — User/contact profile pages and editable contact details
-- **Quick check-in** — Touch-optimized form with name (required), email, phone, and zip (all optional except name)
+- **Quick check-in** — Touch-optimized form with name (required), email, phone, and zip (all optional except name). Attendees already checked in go to confirmation with “Welcome back! You already checked in.”
 - **Smart contact matching** — Searches the Dallas Urbanists database by name; handles new contacts, existing contacts, and multiple matches
 - **Contact enrichment** — Appends new emails, phones, and zips to existing records without overwriting stored data
 - **Email domain shortcuts** — One-click buttons for common email providers (`@gmail.com`, `@yahoo.com`, `@outlook.com`, `@icloud.com`, `@hotmail.com`, `@proton.me`)

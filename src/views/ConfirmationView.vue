@@ -27,7 +27,9 @@ function another() {
 <template>
   <main v-if="state.contact">
     <div class="alert alert-success" role="status">
-      <h2 class="h4 alert-heading mb-0">You're checked in!</h2>
+      <h2 class="h4 alert-heading mb-0">
+        {{ state.alreadyCheckedIn ? 'Welcome back! You already checked in.' : "You're checked in!" }}
+      </h2>
     </div>
 
     <section class="mb-4">

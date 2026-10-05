@@ -102,7 +102,7 @@ test.describe('event timezone differs from device', () => {
         }))
       }
       await go(page)
-      await expect(page.locator('tbody tr').first().locator('td').last()).toHaveText(scenario.expected)
+      await expect(page.locator('tbody tr').filter({ has: page.getByRole('link', { name: 'ALICE ADAMS', exact: true }) }).locator('td').last()).toHaveText(scenario.expected)
     })
   }
 })

@@ -8,7 +8,8 @@ const state = reactive({
   eventId: '',
   form: null,
   matches: [],
-  contact: null
+  contact: null,
+  alreadyCheckedIn: false
 })
 
 async function run(task) {
@@ -27,7 +28,13 @@ async function run(task) {
 
 async function finish(contact) {
   const api = useApi()
-  await api.createCheckin({ contact_id: contact.id, event_id: state.eventId })
+  state.alreadyCheckedIn = false
+  try {
+    await api.createCheckin({ contact_id: contact.id, event_id: state.eventId })
+  } catch (error) {
+    if (!/\balready checked[ -]in\b/i.test(error.message)) throw error
+    state.alreadyCheckedIn = true
+  }
   state.contact = contact
   state.matches = []
   return { name: 'confirmation' }
@@ -45,6 +52,7 @@ function submit(eventId, form) {
     state.form = form
     state.contact = null
     state.matches = []
+    state.alreadyCheckedIn = false
 
     const matches = await useApi().searchContacts(form.name)
     if (matches.length > 1) {
@@ -71,6 +79,7 @@ function reset() {
   state.form = null
   state.matches = []
   state.contact = null
+  state.alreadyCheckedIn = false
 }
 
 export function useCheckin() {

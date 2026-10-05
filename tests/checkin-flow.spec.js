@@ -324,6 +324,50 @@ test.describe('multiple matching contacts', () => {
 })
 
 test.describe('confirmation page', () => {
+  for (const status of [400, 409]) {
+    test(`already checked-in contacts reach confirmation after a ${status} response`, async ({ page }) => {
+      const calls = await mockApi(page, {
+        contacts: [jane()],
+        fail: { checkin: { status, message: 'Contact is already checked in for this event.' } }
+      })
+      await openCheckin(page)
+      await fillCheckin(page, { name: 'Jane Doe', email: 'jane.doe@gmail.com' })
+      await submitCheckin(page)
+
+      await expect(page).toHaveURL(/#\/confirmation$/)
+      await expect(page.getByRole('status')).toHaveText('Welcome back! You already checked in.')
+      await expect(page.locator('main')).toContainText('Upcoming Soon')
+      await expect(page.locator('main')).toContainText('Jane Doe')
+      await expect(page.locator('main')).toContainText('jane.doe@gmail.com')
+      await expect(page.locator('main')).not.toContainText('555-0199')
+      expect(calls.checkin).toEqual([{ contact_id: 7, event_id: EVENT_ID }])
+      expect(calls.create).toHaveLength(0)
+
+      await page.getByRole('button', { name: 'Check in another person' }).click()
+      await expect(page.locator('#name')).toHaveValue('')
+      await expect(page.locator('#email')).toHaveValue('')
+      await mockApi(page)
+      await fillCheckin(page, { name: 'Sam Lee' })
+      await submitCheckin(page)
+      await expect(page.getByRole('status')).toHaveText("You're checked in!")
+    })
+  }
+
+  test('already checked-in contacts selected from matches reach confirmation', async ({ page }) => {
+    const calls = await mockApi(page, {
+      contacts: [jane(), jane({ id: 8, name: 'Jane Smith' })],
+      fail: { checkin: { status: 409, message: 'Contact is already checked in for this event.' } }
+    })
+    await openCheckin(page)
+    await fillCheckin(page, { name: 'Jane' })
+    await submitCheckin(page)
+    await page.getByRole('button', { name: /Jane Doe/ }).click()
+
+    await expect(page).toHaveURL(/#\/confirmation$/)
+    await expect(page.getByRole('status')).toHaveText('Welcome back! You already checked in.')
+    expect(calls.checkin).toEqual([{ contact_id: 7, event_id: EVENT_ID }])
+  })
+
   test('shows event details and the details that were submitted', async ({ page }) => {
     await mockApi(page)
     await openCheckin(page)
@@ -423,6 +467,16 @@ test.describe('API failures', () => {
     await submitCheckin(page)
 
     await expect(page.getByRole('alert')).toContainText('event_id is invalid')
+    await expect(page).toHaveURL(/#\/checkin\/1003$/)
+  })
+
+  test('unrelated conflicts remain errors on the check-in page', async ({ page }) => {
+    await mockApi(page, { fail: { checkin: { status: 409, message: 'Event is closed.' } } })
+    await openCheckin(page)
+    await fillCheckin(page, { name: 'Sam Lee' })
+    await submitCheckin(page)
+
+    await expect(page.getByRole('alert')).toContainText('Event is closed.')
     await expect(page).toHaveURL(/#\/checkin\/1003$/)
   })
 
