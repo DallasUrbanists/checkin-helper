@@ -13,6 +13,27 @@ test.beforeEach(async ({ page }) => {
 const invalidFeedback = (page, id) => page.locator(`#${id}-feedback`)
 const domainButtons = page => page.locator('form .btn-outline-secondary')
 
+test('uses floating labels for all contact fields', async ({ page }) => {
+  for (const [id, placeholder, value] of [
+    ['name', 'Name', 'Jane Doe'],
+    ['email', 'Email', 'jane@example.com'],
+    ['phone', 'Phone', '2145551234'],
+    ['zip', 'Zip code', '75201']
+  ]) {
+    const input = page.locator(`#${id}`)
+    const label = page.locator(`.form-floating > #${id} + label`)
+    await expect(input).toHaveAttribute('placeholder', placeholder)
+    await expect(label).toHaveAttribute('for', id)
+    await expect(label).toBeVisible()
+    const restingTransform = await label.evaluate(element => window.getComputedStyle(element).transform)
+
+    await input.fill(value)
+    await input.blur()
+    await expect.poll(() => label.evaluate(element => window.getComputedStyle(element).transform))
+      .not.toBe(restingTransform)
+  }
+})
+
 test.describe('name', () => {
   test('is required and flagged on blur, not while typing', async ({ page }) => {
     const name = page.locator('#name')
