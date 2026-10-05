@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 import { fillCheckin, mockApi, mockCalendar, submitCheckin } from './helpers.js'
 
 const EVENT_ID = '1003'
@@ -244,6 +245,8 @@ test.describe('multiple matching contacts', () => {
     const smith = option(page, 'Jane Smith')
     await expect(smith).not.toContainText('janesmith@yahoo.com')
     await expect(smith).not.toContainText('75001')
+    const contrast = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze()
+    expect(contrast.violations).toEqual([])
   })
 
   test('reveals each field independently', async ({ page }) => {
@@ -336,6 +339,8 @@ test.describe('confirmation page', () => {
     await expect(main).toContainText('alex@example.com')
     await expect(main).toContainText('214-555-0123')
     await expect(main).toContainText('75204')
+    const contrast = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze()
+    expect(contrast.violations).toEqual([])
   })
 
   test('omits contact fields that were not provided', async ({ page }) => {

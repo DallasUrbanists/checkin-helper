@@ -35,6 +35,9 @@ const dirty = computed(() => editing.value && drafts.value && draftDirty(drafts.
 const bounds = computed(() => timeBounds(event.value))
 const selectedRows = computed(() => checkins.value.filter(row => selection.value.has(String(row.id))))
 const exportRows = computed(() => selectedRows.value.length ? selectedRows.value : checkins.value)
+const exportLabel = computed(() => selectedRows.value.length
+  ? `Export ${selectedRows.value.length}`
+  : 'Export all')
 const allSelected = computed(() => checkins.value.length > 0 && selectedRows.value.length === checkins.value.length)
 const mutationsAllowed = computed(() => operations.enabled.value && staff.value && !operations.busy.value && !operations.pending.value)
 const descriptionHtml = computed(() => {
@@ -44,6 +47,11 @@ const descriptionHtml = computed(() => {
 
 function values(value) { return Array.isArray(value) ? value.filter(v => v != null).map(String) : [] }
 function contactName(row) { return contactFor(row)?.name || row.contact_name || 'Anonymous attendee' }
+function smsLink(phone, row) {
+  const recipient = String(phone).replace(/[^\d+]/g, '')
+  const firstName = contactName(row).trim().split(/\s+/)[0]
+  return `sms:${recipient}?body=${encodeURIComponent(`Hi ${firstName}!`)}`
+}
 function contactId(row) { return row.contact_id ?? contactFor(row)?.id }
 function fullName(row) { return staff.value || row.is_self === true }
 function linked(row) { return fullName(row) && contactId(row) != null && Boolean(contactFor(row)) }
@@ -275,8 +283,8 @@ watch(operations.lastReceipt, receipt => {
                     <RouterLink v-else-if="linked(row)" :to="{ name: 'contact-profile', params: { contactId: contactId(row) } }">{{ shownName(row) }}</RouterLink>
                     <span v-else>{{ shownName(row) }}</span>
                   </td>
-                  <td v-if="staff"><input v-if="editing && contactDraft(row)" v-model="contactDraft(row).emails" class="form-control" :aria-label="`Emails for ${contactName(row)}`" :disabled="operations.busy.value || Boolean(operations.pending.value)"><input v-else-if="editing" class="form-control" aria-label="Emails unavailable" disabled><span v-else>{{ values(contactFor(row)?.emails).join(', ') }}</span></td>
-                  <td v-if="staff"><input v-if="editing && contactDraft(row)" v-model="contactDraft(row).phones" class="form-control" :aria-label="`Phones for ${contactName(row)}`" :disabled="operations.busy.value || Boolean(operations.pending.value)"><input v-else-if="editing" class="form-control" aria-label="Phones unavailable" disabled><span v-else>{{ values(contactFor(row)?.phones).map(p => displayPhone(phoneDigits(p))).join(', ') }}</span></td>
+                  <td v-if="staff"><input v-if="editing && contactDraft(row)" v-model="contactDraft(row).emails" class="form-control" :aria-label="`Emails for ${contactName(row)}`" :disabled="operations.busy.value || Boolean(operations.pending.value)"><input v-else-if="editing" class="form-control" aria-label="Emails unavailable" disabled><template v-else><template v-for="(email, index) in values(contactFor(row)?.emails)" :key="index"><span v-if="index">, </span><a :href="`mailto:${email}`">{{ email }}</a></template></template></td>
+                  <td v-if="staff"><input v-if="editing && contactDraft(row)" v-model="contactDraft(row).phones" class="form-control" :aria-label="`Phones for ${contactName(row)}`" :disabled="operations.busy.value || Boolean(operations.pending.value)"><input v-else-if="editing" class="form-control" aria-label="Phones unavailable" disabled><template v-else><template v-for="(phone, index) in values(contactFor(row)?.phones)" :key="index"><span v-if="index">, </span><a :href="smsLink(phone, row)">{{ displayPhone(phoneDigits(phone)) }}</a></template></template></td>
                   <td>
                     <input v-if="editing && contactDraft(row)" v-model="contactDraft(row).zips" class="form-control" :aria-label="`ZIPs for ${contactName(row)}`" :disabled="operations.busy.value || Boolean(operations.pending.value)">
                     <input v-else-if="editing" class="form-control" aria-label="ZIPs unavailable" disabled>
@@ -289,9 +297,9 @@ watch(operations.lastReceipt, receipt => {
             </table>
           </div>
           <div v-if="staff" class="attendance-toolbar d-flex flex-wrap gap-2 align-items-center" role="toolbar" aria-label="Attendee actions">
-            <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Attendance controls">
+            <div class="btn-group btn-group-sm flex-wrap w-100" role="group" aria-label="Attendance controls">
               <div class="btn-group btn-group-sm" role="group">
-                <button id="attendance-export" type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Export</button>
+                <button id="attendance-export" type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">{{ exportLabel }}</button>
                 <ul class="dropdown-menu" aria-labelledby="attendance-export">
                   <li><button type="button" class="dropdown-item" @click="downloadAttendance('csv')">Download CSV</button></li>
                   <li><button type="button" class="dropdown-item" @click="downloadAttendance('json')">Download JSON</button></li>
@@ -302,10 +310,9 @@ watch(operations.lastReceipt, receipt => {
                 </ul>
               </div>
               <template v-if="editing"><button class="btn btn-sm btn-primary" type="submit" :disabled="!mutationsAllowed">Save changes</button><button class="btn btn-sm btn-outline-secondary" type="button" :disabled="operations.busy.value || Boolean(operations.pending.value)" @click="discard">Discard changes</button></template>
-              <template v-else><button v-if="selectedRows.length" class="btn btn-sm btn-outline-danger" type="button" :disabled="!mutationsAllowed" @click="confirmRemove">Remove selected</button><button v-if="selectedRows.length" class="btn btn-sm btn-outline-secondary" type="button" :disabled="operations.busy.value || Boolean(operations.pending.value)" @click="toggleAll(false)">Clear selection</button></template>
+              <template v-else><button v-if="selectedRows.length" class="btn btn-sm btn-outline-danger" type="button" :disabled="!mutationsAllowed" @click="confirmRemove">Remove selected</button></template>
               <button v-if="!operations.enabled.value" type="button" class="btn btn-sm btn-outline-secondary" @click="operations.refreshHistory().catch(() => {})">Retry connection</button>
             </div>
-            <span v-if="!editing" class="small">{{ selectedRows.length }} selected</span>
             <span v-if="!operations.enabled.value" class="small text-muted">Save, Remove, and Undo require authenticated server history.</span>
           </div>
         </form>
@@ -323,8 +330,10 @@ watch(operations.lastReceipt, receipt => {
   position: relative;
   width: 100vw;
   max-width: none;
+  max-height: calc(100dvh - 8rem);
   margin-left: calc(50% - 50vw);
   overflow-x: auto;
+  overflow-y: auto;
   overscroll-behavior-x: contain;
   scrollbar-color: var(--bs-primary) transparent;
   scrollbar-track-color: transparent;
@@ -364,6 +373,12 @@ watch(operations.lastReceipt, receipt => {
 .attendance-table th,
 .attendance-table td { white-space: nowrap; }
 .attendance-table th { font-weight: 700; }
+.attendance-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #e5ebf0;
+}
 .attendance-table th:last-child,
 .attendance-table td:last-child { padding-right: 2rem; }
 .attendance-table a { color: #003b6f; }
@@ -411,8 +426,14 @@ watch(operations.lastReceipt, receipt => {
   margin-left: calc(50% - 50vw);
   background: var(--bs-body-bg);
   border-top: 1px solid var(--bs-border-color);
-  padding: .75rem max(.25rem, calc((100vw - 100%)/2 + .25rem)) calc(.75rem + env(safe-area-inset-bottom));
+  padding: .75rem .25rem calc(.75rem + env(safe-area-inset-bottom));
 }
+.attendance-toolbar > .btn-group {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+.attendance-toolbar > .btn-group > * { min-width: 0; }
 .attendance-dialog { width: min(32rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); }
 .attendance-dialog::backdrop { background: rgb(0 0 0 / 50%); }
 .attendance-scroll:not(.staff-table) {
@@ -433,7 +454,7 @@ watch(operations.lastReceipt, receipt => {
 .attendance-scroll:not(.staff-table) .attendance-table td:last-child,
 .attendance-scroll:not(.staff-table) .attendance-table th:last-child { padding-right: .75rem; }
 .attendance-scroll:not(.staff-table) .attendance-select,
-.attendance-scroll:not(.staff-table) .attendance-name {
+.attendance-scroll:not(.staff-table) tbody .attendance-name {
   position: static;
   background: transparent;
   box-shadow: none;

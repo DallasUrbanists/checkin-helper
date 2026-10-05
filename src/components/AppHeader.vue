@@ -61,7 +61,7 @@ function goBack() {
           <div class="d-flex align-items-center w-100">
             <button
               type="button"
-              class="btn btn-link link-dark p-0 me-2 d-inline-flex align-items-center text-decoration-none"
+              class="btn btn-link link-light p-0 me-2 d-inline-flex align-items-center text-decoration-none"
               aria-label="Back"
               @click="goBack"
             >

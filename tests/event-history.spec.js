@@ -101,8 +101,8 @@ test('another account has no Undo candidate, dirty drafts block application Undo
 test('commit failure preserves all attendees and selection; no immediate deletion fallback', async ({ page }) => {
   const state = await open(page, { failCommit: true })
   await page.getByLabel('Select all attendees').check()
-  await page.getByRole('button', { name: 'Remove selected', exact: true }).click()
-  await page.getByRole('button', { name: 'Remove attendees', exact: true }).click()
+  await page.getByRole('toolbar').getByRole('button', { name: 'Remove selected', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Remove attendees', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Atomic commit conflict')
   await expect(page.locator('tbody tr')).toHaveCount(4)
   await expect(page.getByLabel('Select all attendees')).toBeChecked()

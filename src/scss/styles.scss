@@ -40,6 +40,11 @@ $border-radius: .4rem;
 $success: #7952b3;
 $primary: #ffa800;
 $secondary: #0c2340;
+$danger: #b02a37;
+$link-color: #003b6f;
+$link-hover-color: #00284c;
+$link-color-dark: #a9d3ff;
+$link-hover-color-dark: #d4e9ff;
 
 // Form Input Overrides
 $input-bg: #ffffff;             // <-- Sets default background for .form-control & .form-select
@@ -98,6 +103,10 @@ $list-group-bg: white;
 //
 // Custom styles
 //
+
+.btn-outline-primary {
+  @include button-outline-variant($secondary);
+}
 
 .loading-interstitial {
   z-index: $zindex-modal;

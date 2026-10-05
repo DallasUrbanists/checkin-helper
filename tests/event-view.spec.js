@@ -1,11 +1,56 @@
 import { test, expect } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
+import AxeBuilder from '@axe-core/playwright'
 import { attendees, mockEventOperations, setAuth } from './event-operations-mock.js'
 
 const open = page => page.goto('/#/events/1')
 const edit = page => page.getByRole('button', { name: 'Edit attendees', exact: true }).click()
 const save = page => page.getByRole('button', { name: 'Save changes', exact: true }).click()
 const mutations = state => state.calls.filter(c => ['PUT', 'DELETE'].includes(c.method) && /\/api\/(contacts|checkins)\//.test(c.path))
+
+async function checkContrast(page) {
+  const result = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze()
+  expect(result.violations.map(violation => ({
+    rule: violation.id,
+    nodes: violation.nodes.map(node => ({ target: node.target, details: node.failureSummary }))
+  }))).toEqual([])
+}
+
+test('clickable event text has sufficient contrast against rendered backgrounds and interaction states', async ({ page }) => {
+  await mockEventOperations(page)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await open(page)
+  await expect(page.getByRole('button', { name: 'Edit attendees' })).toBeEnabled()
+  await page.getByLabel('Select Alice Adams', { exact: true }).check()
+  await checkContrast(page)
+  for (const control of [
+    page.getByRole('button', { name: 'Edit attendees', exact: true }),
+    page.getByRole('link', { name: 'Add attendee', exact: true }),
+    page.getByRole('button', { name: 'Export 1', exact: true }),
+    page.getByRole('toolbar').getByRole('button', { name: 'Remove selected', exact: true }),
+    page.getByRole('link', { name: 'ALICE ADAMS', exact: true }),
+    page.getByRole('link', { name: 'person0@example.org', exact: true }),
+    page.locator('tbody tr').first().getByRole('link', { name: '214-555-0199', exact: true })
+  ]) {
+    await control.hover()
+    await checkContrast(page)
+    await control.focus()
+    await checkContrast(page)
+  }
+  await page.getByRole('button', { name: 'Export 1', exact: true }).click()
+  await checkContrast(page)
+  await page.getByRole('button', { name: 'Copy CSV', exact: true }).hover()
+  await checkContrast(page)
+})
+
+for (const path of ['/', '/checkin/1', '/login', '/contacts/11', '/profile', '/profile/edit']) {
+  test(`shared clickable text contrast on ${path}`, async ({ page }) => {
+    await mockEventOperations(page)
+    await page.goto(`/#${path}`)
+    await expect(page.locator('main')).toBeVisible()
+    await checkContrast(page)
+  })
+}
 
  test('staff lists full links, private fields, formatted phones and home ZIP first', async ({ page }) => {
   await mockEventOperations(page)
@@ -14,6 +59,8 @@ const mutations = state => state.calls.filter(c => ['PUT', 'DELETE'].includes(c.
   await expect(page.getByRole('link', { name: 'ALICE ADAMS' })).toHaveAttribute('href', '#/contacts/11')
   await expect(page.locator('tbody tr').first()).toContainText('person0@example.org, second0@example.org')
   await expect(page.locator('tbody tr').first()).toContainText('214-555-0199')
+  await expect(page.getByRole('link', { name: 'person0@example.org', exact: true })).toHaveAttribute('href', 'mailto:person0@example.org')
+  await expect(page.locator('tbody tr').first().getByRole('link', { name: '214-555-0199', exact: true })).toHaveAttribute('href', 'sms:+12145550199?body=Hi%20Alice!')
   await expect(page.locator('tbody tr').first().locator('strong')).toHaveText('75201')
   await expect(page.locator('tbody tr').first()).not.toHaveAttribute('role', 'link')
   const actions = page.getByRole('group', { name: 'Event actions', exact: true })
@@ -52,7 +99,7 @@ test('public remains redacted; only server-confirmed self links full name; null 
   await expect(page.getByRole('button', { name: 'Edit attendees' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Check in for event', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Add attendee', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Export...', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Export / })).toHaveCount(0)
 })
 
 test('staff downloads all attendees or selected rows with event-local filenames', async ({ page }) => {
@@ -61,7 +108,7 @@ test('staff downloads all attendees or selected rows with event-local filenames'
   const controls = page.getByRole('group', { name: 'Attendance controls', exact: true })
   await expect(controls).toHaveClass(/btn-group-sm/)
   await expect(controls.locator('button.btn:not(.btn-sm)')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Export...', exact: true }).click()
+  await page.getByRole('button', { name: 'Export all', exact: true }).click()
   await expect(controls.locator('.dropdown-item')).toHaveText(['Download CSV', 'Download JSON', 'Copy CSV', 'Copy JSON', 'Copy for email merge'])
   await expect(controls.locator('.dropdown-divider')).toHaveCount(1)
   const jsonDownload = page.waitForEvent('download')
@@ -76,7 +123,7 @@ test('staff downloads all attendees or selected rows with event-local filenames'
   expect(JSON.stringify(records)).not.toContain('private-uid')
   expect(JSON.stringify(records)).not.toContain('revision')
   await page.getByLabel('Select Alice Adams', { exact: true }).check()
-  await page.getByRole('button', { name: 'Export...', exact: true }).click()
+  await page.getByRole('button', { name: 'Export 1', exact: true }).click()
   const csvDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Download CSV', exact: true }).click()
   const csv = await csvDownload
@@ -99,7 +146,7 @@ test('staff copies matching formats, selected email merge and saved rather than 
   })
   await open(page)
   const copy = async format => {
-    await page.getByRole('button', { name: 'Export...', exact: true }).click()
+    await page.getByRole('button', { name: /^Export / }).click()
     await page.getByRole('button', { name: format === 'Email merge' ? 'Copy for email merge' : `Copy ${format}`, exact: true }).click()
     const toast = page.locator('.operation-toast').filter({ hasText: 'Copied to clipboard.' })
     await expect(toast).toBeVisible()
@@ -123,11 +170,11 @@ test('staff copies matching formats, selected email merge and saved rather than 
   await page.evaluate(() => {
     window.navigator.clipboard.writeText = async () => { throw new Error('Permission denied') }
   })
-  await page.getByRole('button', { name: 'Export...', exact: true }).click()
+  await page.getByRole('button', { name: 'Export 1', exact: true }).click()
   await page.getByRole('button', { name: 'Copy JSON', exact: true }).click()
   await expect(page.locator('.operation-toast').filter({ hasText: 'Could not copy to clipboard.' })).toBeVisible()
   await setAuth(page, {})
-  await expect(page.getByRole('button', { name: 'Export...', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Export / })).toHaveCount(0)
   await expect(page.getByText('Could not copy to clipboard.', { exact: false })).toHaveCount(0)
 })
 
@@ -149,16 +196,42 @@ test('claim resolution fails closed and stale result cannot elevate another acco
   await expect(page.locator('tbody')).not.toContainText('example.org')
 })
 
-test('selection supports indeterminate, clear all, editor/discard and no-op saves', async ({ page }) => {
+test('selection supports indeterminate, select-all clearing, editor/discard and no-op saves', async ({ page }) => {
   const state = await mockEventOperations(page)
   await open(page)
+  const toolbar = page.getByRole('toolbar', { name: 'Attendee actions' })
+  const controls = toolbar.getByRole('group', { name: 'Attendance controls', exact: true })
+  await expect(controls).toHaveClass(/w-100/)
+  await expect(toolbar.getByRole('button', { name: 'Export all', exact: true })).toBeVisible()
+  await expect(toolbar).not.toContainText(/\d+ selected/)
+  const width = await controls.evaluate(group => ({
+    actual: group.getBoundingClientRect().width,
+    available: group.parentElement.clientWidth - parseFloat(window.getComputedStyle(group.parentElement).paddingLeft) - parseFloat(window.getComputedStyle(group.parentElement).paddingRight)
+  }))
+  expect(Math.abs(width.actual - width.available)).toBeLessThan(1)
+  const viewportWidth = await toolbar.evaluate(bar => ({
+    left: bar.getBoundingClientRect().left,
+    right: bar.getBoundingClientRect().right,
+    viewport: window.innerWidth,
+    padding: window.getComputedStyle(bar).paddingLeft
+  }))
+  expect(viewportWidth.left).toBeCloseTo(0, 0)
+  expect(viewportWidth.right).toBeCloseTo(viewportWidth.viewport, 0)
+  expect(viewportWidth.padding).toBe('4px')
   await page.getByLabel('Select Alice Adams', { exact: true }).check()
+  await expect(toolbar.getByRole('button', { name: 'Export 1', exact: true })).toBeVisible()
+  await expect(toolbar.getByRole('button', { name: 'Remove selected', exact: true })).toBeVisible()
+  const widths = await controls.evaluate(group => [...group.children].map(control => control.getBoundingClientRect().width))
+  expect(Math.abs(widths[0] - widths[1])).toBeLessThan(2)
   await expect(page.getByLabel('Select all attendees')).toHaveJSProperty('indeterminate', true)
   await page.getByLabel('Select all attendees').check()
-  await expect(page.getByText('4 selected', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Clear selection' }).click()
+  await expect(toolbar.getByRole('button', { name: 'Export 4', exact: true })).toBeVisible()
+  await expect(toolbar).not.toContainText(/\d+ selected/)
+  await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0)
+  await page.getByLabel('Select all attendees').uncheck()
+  await expect(toolbar.getByRole('button', { name: 'Export all', exact: true })).toBeVisible()
   await edit(page)
-  await expect(page.getByRole('button', { name: 'Remove selected' })).toHaveCount(0)
+  await expect(toolbar.getByRole('button', { name: 'Remove selected', exact: true })).toHaveCount(0)
   await expect(page.getByLabel('Select all attendees')).toHaveCount(0)
   await page.getByLabel('Name for Alice Adams', { exact: true }).fill('Changed Name')
   await page.getByRole('button', { name: 'Discard changes' }).click()
@@ -170,6 +243,36 @@ test('selection supports indeterminate, clear all, editor/discard and no-op save
   expect(mutations(state)).toHaveLength(0)
   expect(state.groups).toHaveLength(0)
 })
+
+for (const staff of [true, false]) {
+  test(`${staff ? 'staff' : 'public'} table headings stay pinned while long attendance lists scroll`, async ({ page }) => {
+    const contacts = attendees()
+    const rows = Array.from({ length: 60 }, (_, index) => ({ ...contacts[index % contacts.length], id: index + 1 }))
+    await mockEventOperations(page, { rows, auth: { uid: 'attendee-a', claims: { staff } } })
+    await open(page)
+    await expect(page.locator('tbody tr')).toHaveCount(60)
+    const scroll = page.locator('.attendance-scroll')
+    await scroll.evaluate(element => {
+      element.scrollTop = 300
+      element.scrollLeft = Math.min(200, element.scrollWidth - element.clientWidth)
+    })
+    await expect.poll(() => scroll.evaluate(element => {
+      const top = element.getBoundingClientRect().top
+      return [...element.querySelectorAll('thead th')].every(cell => Math.abs(cell.getBoundingClientRect().top - top) < 1)
+    })).toBe(true)
+    const positions = await scroll.evaluate(element => ({
+      scrollTop: element.scrollTop,
+      bodyTop: element.querySelector('tbody tr').getBoundingClientRect().top,
+      headingTop: element.querySelector('thead').getBoundingClientRect().top,
+      pinnedTop: element.querySelector('thead th').getBoundingClientRect().top,
+      nameLeft: element.querySelector('thead .attendance-name').getBoundingClientRect().left,
+      checkboxRight: element.querySelector('thead .attendance-select')?.getBoundingClientRect().right
+    }))
+    expect(positions.scrollTop).toBeGreaterThan(0)
+    expect(positions.bodyTop).toBeLessThan(positions.pinnedTop)
+    if (staff) expect(Math.abs(positions.nameLeft - positions.checkboxRight)).toBeLessThan(1)
+  })
+}
 
 test('deduplicates contacts, sends only changed fields and per-checkin timestamps', async ({ page }) => {
   const rows = attendees()
@@ -197,13 +300,13 @@ for (const count of [1, 2, 3, 4]) {
     const state = await mockEventOperations(page)
     await open(page)
     for (const name of ['Alice Adams', 'Bob Brown', 'Carol Clark', 'David Davis'].slice(0, count)) await page.getByLabel(`Select ${name}`, { exact: true }).check()
-    await page.getByRole('button', { name: 'Remove selected', exact: true }).click()
+    await page.getByRole('toolbar').getByRole('button', { name: 'Remove selected', exact: true }).click()
     const target = ['Alice Adams', 'Alice Adams and Bob Brown', 'Alice Adams, Bob Brown, and Carol Clark', '4 selected contacts'][count - 1]
     await expect(page.getByRole('dialog')).toContainText(`remove ${target} from list of attendees`)
     await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog')).not.toBeVisible()
-    await expect(page.getByRole('button', { name: 'Remove selected', exact: true })).toBeFocused()
+    await expect(page.getByRole('toolbar').getByRole('button', { name: 'Remove selected', exact: true })).toBeFocused()
     expect(mutations(state)).toHaveLength(0)
   })
 }
@@ -228,8 +331,8 @@ test('atomic removal refreshes count and server Undo restores it without browser
   const state = await mockEventOperations(page)
   await open(page)
   await page.getByLabel('Select all attendees').check()
-  await page.getByRole('button', { name: 'Remove selected', exact: true }).click()
-  await page.getByRole('button', { name: 'Remove attendees', exact: true }).click()
+  await page.getByRole('toolbar').getByRole('button', { name: 'Remove selected', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Remove attendees', exact: true }).click()
   await expect(page.locator('tbody tr')).toHaveCount(0)
   expect(mutations(state).every(call => call.method === 'DELETE' && call.path.startsWith('/api/checkins/'))).toBe(true)
   await page.keyboard.press('Control+z')
