@@ -112,13 +112,4 @@ $list-group-bg: white;
   z-index: $zindex-modal;
 }
 
-body:has(.attendance-expanded) .operation-notifications {
-  position: fixed;
-  top: .5rem;
-  right: .5rem;
-  left: .5rem;
-  z-index: 1080;
-  width: auto;
-}
-
 

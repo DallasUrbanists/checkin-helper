@@ -114,8 +114,9 @@ function downloadAttendance(format) {
     document.body.append(link)
     link.click()
     link.remove()
+    operations.notify(`Download started: ${format.toUpperCase()} attendance data.`, 'success', null, { autoDismiss: true })
   } catch {
-    operations.notify('Download failed. Please try again.')
+    operations.notify('Download failed. Please try again.', 'error', null, { autoDismiss: true })
   } finally {
     if (url) setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
@@ -125,9 +126,15 @@ async function copyAttendance(format) {
   const current = generation
   try {
     await window.navigator.clipboard.writeText(serializeAttendance(exportRows.value, format))
-    if (current === generation) operations.notify('Copied to clipboard.', 'success')
+    if (current === generation) {
+      const label = format === 'email' ? 'email merge data' : `${format.toUpperCase()} attendance data`
+      operations.notify(`Copied to clipboard. ${label}.`, 'success', null, { autoDismiss: true })
+    }
   } catch {
-    if (current === generation) operations.notify('Could not copy to clipboard. Check your browser clipboard permissions.')
+    if (current === generation) {
+      const label = format === 'email' ? 'email merge data' : `${format.toUpperCase()} attendance data`
+      operations.notify(`Could not copy to clipboard. ${label}. Check your browser clipboard permissions.`, 'error', null, { autoDismiss: true })
+    }
   }
 }
 function clearEditor() { editing.value = false; drafts.value = null; operations.dirty.value = false }

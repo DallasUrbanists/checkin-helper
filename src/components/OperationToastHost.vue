@@ -46,6 +46,14 @@ async function dismiss(id) {
   }
 }
 
+function pauseAllToasts() {
+  operations.pauseToasts()
+}
+
+function resetAllToasts(event) {
+  if (!notifications.value?.contains(event.relatedTarget)) operations.resetToasts()
+}
+
 watch(busy, async value => {
   if (!mounted) return
   if (value) {
@@ -75,19 +83,20 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section ref="notifications" class="operation-notifications" aria-label="Operation notifications">
-    <div aria-live="polite" aria-atomic="false" class="operation-toast-list">
-      <div v-for="toast in toasts" :key="toast.id" class="operation-toast shadow border rounded bg-body p-3"
-        :class="{ 'border-danger': toast.kind === 'error' }" role="status">
-        <p class="mb-2">{{ toast.message }}</p>
+  <section ref="notifications" class="operation-notifications px-2 pb-4" aria-label="Operation notifications">
+    <TransitionGroup name="toast" tag="div" aria-live="polite" aria-atomic="false" class="operation-toast-list">
+      <div v-for="toast in toasts" :key="toast.id" class="operation-toast shadow border rounded bg-body p-3 d-flex flex-row align-items-center"
+        :class="{ 'border-danger': toast.kind === 'error' }" role="status"
+        @mouseenter="pauseAllToasts" @mouseleave="resetAllToasts">
+        <p class="flex-grow-1 mb-0">{{ toast.message }}</p>
         <div class="d-flex gap-2 flex-wrap">
           <button v-if="toast.groupId" type="button" class="btn btn-sm btn-outline-primary"
             :disabled="!canUndo(toast)" @click="operations.undo(toast.groupId).catch(() => {})">Undo</button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="busy"
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" :disabled="busy"
             @click="dismiss(toast.id)">Dismiss</button>
         </div>
       </div>
-    </div>
+    </TransitionGroup>
     <div v-if="pending" class="operation-toast shadow border rounded bg-body p-3" role="status" aria-live="polite">
       <p class="mb-2">The operation outcome needs recovery before another action.</p>
       <button type="button" class="btn btn-sm btn-primary" :disabled="busy || (pending.kind === 'undo' && dirty)"
@@ -105,16 +114,31 @@ onUnmounted(() => {
 
 <style scoped>
 .operation-notifications {
-  position: relative;
-  width: 100%;
-  max-height: 40dvh;
-  overflow-y: auto;
+  position: fixed;
+  top: calc(52px + .5rem);
+  right: .5rem;
+  left: .5rem;
+  z-index: 1080;
+  max-height: calc(100dvh - 52px - 1rem);
+  overflow: hidden;
+  pointer-events: none;
   scroll-margin-top: 4rem;
 }
-.operation-notifications:has(.operation-toast) {
-  margin-bottom: 1rem;
+.operation-toast {
+  width: 100%;
+  max-width: 100%;
+  margin-top: .5rem;
+  margin-left: auto;
+  pointer-events: auto;
+  box-shadow: 0 .5rem 1rem rgb(0 0 0 / 15%);
 }
-.operation-toast { pointer-events: auto; margin-top: .5rem; }
+.operation-toast button { pointer-events: auto; }
+:global(body:has(.attendance-expanded)) .operation-notifications { pointer-events: auto; }
+:global(body:has(.attendance-expanded)) .operation-toast { pointer-events: auto; }
+.toast-enter-active,
+.toast-leave-active { transition: transform .3s ease, opacity .3s ease; }
+.toast-enter-from,
+.toast-leave-to { opacity: 0; transform: translateX(10%); }
 .operation-overlay {
   position: fixed;
   inset: 0;

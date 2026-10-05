@@ -12,6 +12,7 @@ const busy = ref(false)
 const dirty = ref(false)
 const history = shallowRef([])
 const toasts = ref([])
+const toastTimers = new Map()
 const pending = shallowRef(null)
 const lastReceipt = shallowRef(null)
 const latest = computed(() => latestCommitted(history.value))
@@ -45,8 +46,54 @@ function immutable(value) {
   return value
 }
 
-function notify(message, kind = 'error', groupId = null) {
-  toasts.value.push({ id: key(), message, kind, groupId })
+function dismissToast(id) {
+  const timer = toastTimers.get(id)
+  if (timer) {
+    clearTimeout(timer.timer)
+    toastTimers.delete(id)
+  }
+  toasts.value = toasts.value.filter(toast => toast.id !== id)
+}
+
+function scheduleToastDismissal(id) {
+  const timer = toastTimers.get(id)
+  if (!timer) return
+  timer.startedAt = Date.now()
+  timer.timer = setTimeout(() => dismissToast(id), timer.remaining)
+}
+
+function pauseToast(id) {
+  const timer = toastTimers.get(id)
+  if (!timer?.timer) return
+  clearTimeout(timer.timer)
+  timer.timer = null
+  timer.remaining = Math.max(0, timer.remaining - (Date.now() - timer.startedAt))
+}
+
+function pauseToasts() {
+  toastTimers.forEach((_, id) => pauseToast(id))
+}
+
+function resetToast(id) {
+  const timer = toastTimers.get(id)
+  if (!timer) return
+  if (timer.timer) clearTimeout(timer.timer)
+  timer.remaining = 5000
+  timer.timer = null
+  scheduleToastDismissal(id)
+}
+
+function resetToasts() {
+  toastTimers.forEach((_, id) => resetToast(id))
+}
+
+function notify(message, kind = 'error', groupId = null, { autoDismiss = false } = {}) {
+  const id = key()
+  toasts.value.push({ id, message, kind, groupId })
+  if (autoDismiss) {
+    toastTimers.set(id, { timer: null, remaining: 5000, startedAt: Date.now() })
+    scheduleToastDismissal(id)
+  }
 }
 
 function errorMessage(error) {
@@ -74,6 +121,8 @@ function clear() {
   lastReceipt.value = null
   history.value = []
   capabilityReady.value = false
+  toastTimers.forEach(({ timer }) => clearTimeout(timer))
+  toastTimers.clear()
   toasts.value = []
 }
 
@@ -397,5 +446,5 @@ export function useEventOperations() {
     }, { immediate: true, flush: 'sync' })
   }
   return { enabled, busy, dirty, history, latest, toasts, pending, lastReceipt, refreshHistory, execute, undo, notify,
-    dismissToast: id => { toasts.value = toasts.value.filter(toast => toast.id !== id) }, clear, retryPending }
+    dismissToast, pauseToast, pauseToasts, resetToasts, clear, retryPending }
 }
